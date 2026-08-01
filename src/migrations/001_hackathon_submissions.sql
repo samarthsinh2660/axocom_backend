@@ -1,0 +1,55 @@
+-- Adds the Pace Hackathon submission domain to an existing Axocom database.
+-- Axocom users with is_admin = TRUE are used as reviewers.
+
+CREATE TABLE IF NOT EXISTS solution_submissions (
+    id VARCHAR(255) PRIMARY KEY,
+    full_name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    normalized_email VARCHAR(255) NOT NULL,
+    phone VARCHAR(50) NOT NULL,
+    normalized_phone VARCHAR(20) NOT NULL,
+    problem_code VARCHAR(100) NOT NULL,
+    solution_title VARCHAR(255) NOT NULL,
+    solution_description TEXT NOT NULL,
+    prototype_url TEXT,
+    contact_consent_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    status ENUM('pending', 'accepted', 'rejected') NOT NULL DEFAULT 'pending',
+    admin_note TEXT,
+    reviewed_at TIMESTAMP NULL,
+    reviewed_by_admin_id INT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_solution_normalized_email (normalized_email),
+    UNIQUE KEY unique_solution_normalized_phone (normalized_phone),
+    INDEX idx_solution_status (status),
+    INDEX idx_solution_created_at (created_at),
+    INDEX idx_solution_problem_code (problem_code),
+    CONSTRAINT fk_solution_reviewer FOREIGN KEY (reviewed_by_admin_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS mentor_applications (
+    id VARCHAR(255) PRIMARY KEY,
+    full_name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    normalized_email VARCHAR(255) NOT NULL,
+    phone VARCHAR(50) NOT NULL,
+    normalized_phone VARCHAR(20) NOT NULL,
+    current_role VARCHAR(255) NOT NULL,
+    organisation VARCHAR(255),
+    expertise TEXT NOT NULL,
+    experience_summary TEXT NOT NULL,
+    motivation TEXT NOT NULL,
+    profile_url TEXT,
+    contact_consent_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    status ENUM('pending', 'accepted', 'rejected') NOT NULL DEFAULT 'pending',
+    admin_note TEXT,
+    reviewed_at TIMESTAMP NULL,
+    reviewed_by_admin_id INT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_mentor_normalized_email (normalized_email),
+    UNIQUE KEY unique_mentor_normalized_phone (normalized_phone),
+    INDEX idx_mentor_status (status),
+    INDEX idx_mentor_created_at (created_at),
+    CONSTRAINT fk_mentor_reviewer FOREIGN KEY (reviewed_by_admin_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB;

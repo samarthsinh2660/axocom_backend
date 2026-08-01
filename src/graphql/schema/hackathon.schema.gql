@@ -1,0 +1,17 @@
+enum ReviewStatus {
+  pending
+  accepted
+  rejected
+}
+
+type Pagination {
+  total: Int!
+  page: Int!
+  limit: Int!
+  totalPages: Int!
+}
+
+type PublicStats {
+  acceptedSolutions: Int!
+  acceptedMentors: Int!
+}

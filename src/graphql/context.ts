@@ -1,7 +1,7 @@
 import { GraphQLError } from 'graphql';
-import { Request } from 'express';
-import { TokenData } from '../utils/jwt';
-import { Loaders } from './loaders/dataloader';
+import type { Request } from 'express';
+import type { TokenData } from '../utils/jwt';
+import type { Loaders } from './loaders/dataloader';
 
 export interface GraphQLContext {
     req: Request;
@@ -26,4 +26,22 @@ export function requireAdmin(context: GraphQLContext): TokenData {
         });
     }
     return user;
+}
+
+export function toGraphQLError(error: { message: string; code: number; statusCode: number }): GraphQLError {
+    const code = error.statusCode === 401
+        ? 'UNAUTHORIZED'
+        : error.statusCode === 403
+            ? 'FORBIDDEN'
+            : error.statusCode === 404
+                ? 'NOT_FOUND'
+                : error.statusCode === 409
+                    ? 'CONFLICT'
+                    : error.statusCode === 400
+                        ? 'BAD_USER_INPUT'
+                        : 'INTERNAL_SERVER_ERROR';
+
+    return new GraphQLError(error.message, {
+        extensions: { code, statusCode: error.statusCode, errorCode: error.code },
+    });
 }

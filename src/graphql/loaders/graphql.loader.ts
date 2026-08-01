@@ -11,6 +11,8 @@ import { constituencyResolvers } from "../resolvers/constituency.resolver";
 import { electionCandidateResolvers } from "../resolvers/election_candidate.resolver";
 import { electionResultResolvers } from "../resolvers/election_result.resolver";
 import { flagResolvers } from "../resolvers/flag.resolver";
+import { mentorResolvers } from "../resolvers/mentor.resolver";
+import { solutionResolvers } from "../resolvers/solution.resolver";
 
 const schemaPath = join(process.cwd(), "src/graphql/schema");
 
@@ -32,6 +34,8 @@ export function buildGraphQL() {
         electionCandidateResolvers,
         electionResultResolvers,
         flagResolvers,
+        mentorResolvers,
+        solutionResolvers,
     ]);
 
     return { typeDefs, resolvers };

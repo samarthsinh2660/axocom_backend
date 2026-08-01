@@ -245,14 +245,87 @@ CREATE TABLE `users` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Dumping data for table `users`
---
 
 LOCK TABLES `users` WRITE;
 /*!40000 ALTER TABLE `users` DISABLE KEYS */;
-INSERT INTO `users` VALUES (1,'user@example.com','$2b$12$OFSJ2LtN/6XTUmp0T3T7QenqjBCqcOQlbqjSraQshLGgnMtQEBkAe','Test',0,'Bangalore South','2026-01-31 07:03:52','2026-01-31 07:03:52');
+INSERT INTO `users` VALUES (1,'user@example.com','$2a$12$NKmNtEFkcu.CyhGsD1EBXO69CtGQnNjfHPZDXEHwTX4BcHebTxUC2','Test',0,'Bangalore South','2026-01-31 07:03:52','2026-01-31 07:03:52');
+INSERT INTO `users` VALUES (2,'user@example2.com','$2a$12$NKmNtEFkcu.CyhGsD1EBXO69CtGQnNjfHPZDXEHwTX4BcHebTxUC2','Test',1,'Bangalore South','2026-01-31 07:03:52','2026-01-31 07:03:52');
+
 /*!40000 ALTER TABLE `users` ENABLE KEYS */;
 UNLOCK TABLES;
+
+--
+-- Table structure for table `solution_submissions`
+--
+
+DROP TABLE IF EXISTS `solution_submissions`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `solution_submissions` (
+  `id` varchar(255) NOT NULL,
+  `full_name` varchar(255) NOT NULL,
+  `email` varchar(255) NOT NULL,
+  `normalized_email` varchar(255) NOT NULL,
+  `phone` varchar(50) NOT NULL,
+  `normalized_phone` varchar(20) NOT NULL,
+  `problem_code` varchar(100) NOT NULL,
+  `solution_title` varchar(255) NOT NULL,
+  `solution_description` text NOT NULL,
+  `prototype_url` text,
+  `contact_consent_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `status` enum('pending','accepted','rejected') NOT NULL DEFAULT 'pending',
+  `admin_note` text,
+  `reviewed_at` timestamp NULL DEFAULT NULL,
+  `reviewed_by_admin_id` int DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `unique_solution_normalized_email` (`normalized_email`),
+  UNIQUE KEY `unique_solution_normalized_phone` (`normalized_phone`),
+  KEY `idx_solution_status` (`status`),
+  KEY `idx_solution_created_at` (`created_at`),
+  KEY `idx_solution_problem_code` (`problem_code`),
+  KEY `fk_solution_reviewer` (`reviewed_by_admin_id`),
+  CONSTRAINT `fk_solution_reviewer` FOREIGN KEY (`reviewed_by_admin_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `mentor_applications`
+--
+
+DROP TABLE IF EXISTS `mentor_applications`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `mentor_applications` (
+  `id` varchar(255) NOT NULL,
+  `full_name` varchar(255) NOT NULL,
+  `email` varchar(255) NOT NULL,
+  `normalized_email` varchar(255) NOT NULL,
+  `phone` varchar(50) NOT NULL,
+  `normalized_phone` varchar(20) NOT NULL,
+  `current_role` varchar(255) NOT NULL,
+  `organisation` varchar(255) DEFAULT NULL,
+  `expertise` text NOT NULL,
+  `experience_summary` text NOT NULL,
+  `motivation` text NOT NULL,
+  `profile_url` text,
+  `contact_consent_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `status` enum('pending','accepted','rejected') NOT NULL DEFAULT 'pending',
+  `admin_note` text,
+  `reviewed_at` timestamp NULL DEFAULT NULL,
+  `reviewed_by_admin_id` int DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `unique_mentor_normalized_email` (`normalized_email`),
+  UNIQUE KEY `unique_mentor_normalized_phone` (`normalized_phone`),
+  KEY `idx_mentor_status` (`status`),
+  KEY `idx_mentor_created_at` (`created_at`),
+  KEY `fk_mentor_reviewer` (`reviewed_by_admin_id`),
+  CONSTRAINT `fk_mentor_reviewer` FOREIGN KEY (`reviewed_by_admin_id`) REFERENCES `users` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 
 --
 -- Table structure for table `voter_details`

@@ -99,8 +99,23 @@ export const ERRORS = {
     ELECTION_NOT_FOUND: new RequestError("Election not found", 50006, 404),
     USER_ALREADY_EXISTS: new RequestError("User already exists", 50007, 409),
 
+    // Hackathon submission errors (6xxxx)
+    DUPLICATE_SUBMISSION: new RequestError("An entry already exists for this email or phone", 60001, 409),
+    SOLUTION_NOT_FOUND: new RequestError("Solution submission not found", 60003, 404),
+    MENTOR_NOT_FOUND: new RequestError("Mentor application not found", 60004, 404),
+    INVALID_REVIEW_STATUS: new RequestError("Invalid review status", 60005, 400),
+
 
 };
+
+export function isDuplicateKeyError(error: unknown): boolean {
+    if (typeof error !== "object" || error === null) return false;
+
+    const databaseError = error as { code?: string; errno?: number; message?: string };
+    return databaseError.code === "ER_DUP_ENTRY"
+        || databaseError.errno === 1062
+        || databaseError.message?.includes("Duplicate entry") === true;
+}
 
 // Helper function to check if error is a RequestError
 export function isRequestError(error: any): error is RequestError {

@@ -1,0 +1,76 @@
+type PublicMentor {
+  id: ID!
+  fullName: String!
+  currentRole: String!
+  organisation: String
+  expertise: String!
+  experienceSummary: String!
+  motivation: String!
+  profileUrl: String
+  createdAt: DateTime!
+  status: ReviewStatus!
+}
+
+type MentorApplication {
+  id: ID!
+  fullName: String!
+  email: String!
+  phone: String!
+  currentRole: String!
+  organisation: String
+  expertise: String!
+  experienceSummary: String!
+  motivation: String!
+  profileUrl: String
+  contactConsentAt: DateTime!
+  status: ReviewStatus!
+  adminNote: String
+  reviewedAt: DateTime
+  reviewedByAdminId: Int
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type PublicMentorConnection {
+  data: [PublicMentor!]!
+  pagination: Pagination!
+}
+
+type MentorApplicationConnection {
+  data: [MentorApplication!]!
+  pagination: Pagination!
+}
+
+type ApplyMentorResult {
+  submissionId: ID!
+  status: String!
+}
+
+input ApplyMentorInput {
+  fullName: String!
+  email: String!
+  phone: String!
+  currentRole: String!
+  organisation: String
+  expertise: [String!]!
+  experienceSummary: String!
+  motivation: String!
+  profileUrl: String
+  contactConsent: Boolean!
+}
+
+extend type Query {
+  publicMentors(page: Int = 1, limit: Int = 50): PublicMentorConnection!
+  adminMentorApplications(
+    status: ReviewStatus
+    search: String
+    page: Int = 1
+    limit: Int = 20
+  ): MentorApplicationConnection!
+  adminMentorApplication(id: ID!): MentorApplication
+}
+
+extend type Mutation {
+  applyAsMentor(input: ApplyMentorInput!): ApplyMentorResult!
+  updateMentorStatus(id: ID!, input: UpdateReviewStatusInput!): Boolean!
+}

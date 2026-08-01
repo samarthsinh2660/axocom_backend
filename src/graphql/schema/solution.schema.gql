@@ -1,0 +1,77 @@
+type PublicSolution {
+  id: ID!
+  fullName: String!
+  problemCode: String!
+  solutionTitle: String!
+  solutionDescription: String!
+  prototypeUrl: String
+  createdAt: DateTime!
+  status: ReviewStatus!
+}
+
+type SolutionSubmission {
+  id: ID!
+  fullName: String!
+  email: String!
+  phone: String!
+  problemCode: String!
+  solutionTitle: String!
+  solutionDescription: String!
+  prototypeUrl: String
+  contactConsentAt: DateTime!
+  status: ReviewStatus!
+  adminNote: String
+  reviewedAt: DateTime
+  reviewedByAdminId: Int
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type PublicSolutionConnection {
+  data: [PublicSolution!]!
+  pagination: Pagination!
+}
+
+type SolutionSubmissionConnection {
+  data: [SolutionSubmission!]!
+  pagination: Pagination!
+}
+
+type SubmitSolutionResult {
+  submissionId: ID!
+  status: String!
+}
+
+input SubmitSolutionInput {
+  fullName: String!
+  email: String!
+  phone: String!
+  problemCode: String!
+  solutionTitle: String!
+  solutionDescription: String!
+  prototypeUrl: String
+  contactConsent: Boolean!
+}
+
+input UpdateReviewStatusInput {
+  status: ReviewStatus!
+  adminNote: String
+}
+
+extend type Query {
+  publicSolutions(problemCode: String, page: Int = 1, limit: Int = 50): PublicSolutionConnection!
+  publicStats: PublicStats!
+  adminSolutionSubmissions(
+    status: ReviewStatus
+    search: String
+    problemCode: String
+    page: Int = 1
+    limit: Int = 20
+  ): SolutionSubmissionConnection!
+  adminSolutionSubmission(id: ID!): SolutionSubmission
+}
+
+extend type Mutation {
+  submitSolution(input: SubmitSolutionInput!): SubmitSolutionResult!
+  updateSolutionStatus(id: ID!, input: UpdateReviewStatusInput!): Boolean!
+}
