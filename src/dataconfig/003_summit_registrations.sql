@@ -4,6 +4,12 @@
 -- Amounts are stored in the smallest currency unit (paise for INR), matching
 -- Razorpay's convention, so no floating point rounding is possible.
 --
+-- Listed prices are exclusive of GST. GST is charged per unit and then
+-- multiplied by quantity, the way an invoice line item works, so the per-unit
+-- figure is what gets rounded and stored. total_amount is what is charged.
+-- gst_rate_bps records the rate in force when the row was created, so a later
+-- rate change does not rewrite history.
+--
 -- The razorpay_* columns are written by the payment flow. They are nullable and
 -- unique: NULL until an order is created, and unique afterwards so a replayed
 -- gateway callback cannot record the same payment twice.
@@ -21,6 +27,10 @@ CREATE TABLE IF NOT EXISTS delegate_pass_registrations (
     audience VARCHAR(255) NOT NULL,
     quantity INT NOT NULL DEFAULT 1,
     unit_amount BIGINT NOT NULL,
+    unit_gst_amount BIGINT NOT NULL DEFAULT 0,
+    subtotal_amount BIGINT NOT NULL,
+    gst_rate_bps INT NOT NULL DEFAULT 1800,
+    gst_amount BIGINT NOT NULL DEFAULT 0,
     total_amount BIGINT NOT NULL,
     currency VARCHAR(3) NOT NULL DEFAULT 'INR',
     gst_number VARCHAR(50),
@@ -55,6 +65,9 @@ CREATE TABLE IF NOT EXISTS nomination_registrations (
     website VARCHAR(500),
     achievements TEXT NOT NULL,
     plan_name VARCHAR(255) NOT NULL,
+    base_amount BIGINT NOT NULL,
+    gst_rate_bps INT NOT NULL DEFAULT 1800,
+    gst_amount BIGINT NOT NULL DEFAULT 0,
     total_amount BIGINT NOT NULL,
     currency VARCHAR(3) NOT NULL DEFAULT 'INR',
     contact_consent_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

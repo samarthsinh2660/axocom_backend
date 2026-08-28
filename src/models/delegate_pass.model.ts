@@ -16,6 +16,10 @@ CREATE TABLE IF NOT EXISTS delegate_pass_registrations (
     audience VARCHAR(255) NOT NULL,
     quantity INT NOT NULL DEFAULT 1,
     unit_amount BIGINT NOT NULL,
+    unit_gst_amount BIGINT NOT NULL DEFAULT 0,
+    subtotal_amount BIGINT NOT NULL,
+    gst_rate_bps INT NOT NULL DEFAULT 1800,
+    gst_amount BIGINT NOT NULL DEFAULT 0,
     total_amount BIGINT NOT NULL,
     currency VARCHAR(3) NOT NULL DEFAULT 'INR',
     gst_number VARCHAR(50),
@@ -57,7 +61,16 @@ export interface DelegatePassRegistrationRow extends RowDataPacket {
     pass_name: string;
     audience: string;
     quantity: number;
+    /** Per pass, exclusive of GST. */
     unit_amount: number;
+    /** GST on one pass. */
+    unit_gst_amount: number;
+    /** unit_amount x quantity, exclusive of GST. */
+    subtotal_amount: number;
+    gst_rate_bps: number;
+    /** unit_gst_amount x quantity. */
+    gst_amount: number;
+    /** subtotal_amount + gst_amount. This is what is charged. */
     total_amount: number;
     currency: string;
     gst_number: string | null;

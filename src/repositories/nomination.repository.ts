@@ -12,15 +12,26 @@ import { ERRORS, RequestError, isDuplicateKeyError } from "../utils/error";
 import createLogger from "../utils/logger";
 import { isValidNormalizedPhone, normalizeEmail, normalizePhone } from "../utils/normalize";
 import { buildPagination, clampPage, type Paginated } from "../utils/pagination";
+import { calculateGst } from "../utils/gst";
 
 const logger = createLogger("@nomination.repository");
 
 const PAYMENT_STATUSES: PaymentStatus[] = ["pending", "paid", "failed", "refunded"];
 
 class NominationRepository {
-    async create(
-        input: CreateNominationInput
-    ): Promise<Result<{ registrationId: string; totalAmount: number; paymentStatus: string }, RequestError>> {
+    async create(input: CreateNominationInput): Promise<
+        Result<
+            {
+                registrationId: string;
+                subtotalAmount: number;
+                gstAmount: number;
+                gstRateBps: number;
+                totalAmount: number;
+                paymentStatus: string;
+            },
+            RequestError
+        >
+    > {
         if (
             !input.nomineeName?.trim()
             || !input.organisation?.trim()
@@ -34,7 +45,7 @@ class NominationRepository {
             return err(ERRORS.INVALID_REQUEST_BODY);
         }
 
-        if (!Number.isInteger(input.totalAmount) || input.totalAmount <= 0) {
+        if (!Number.isInteger(input.baseAmount) || input.baseAmount <= 0) {
             return err(ERRORS.INVALID_NOMINATION_PLAN);
         }
 
@@ -49,13 +60,16 @@ class NominationRepository {
         }
 
         const registrationId = `nom_${randomBytes(9).toString("base64url")}`;
+        // A nomination is a single item, so quantity is always one.
+        const gst = calculateGst(input.baseAmount, 1);
 
         try {
             await db.execute(
                 `INSERT INTO ${NOMINATION_REGISTRATIONS_TABLE}
                 (id, nominee_name, organisation, designation, email, normalized_email, phone, normalized_phone,
-                 website, achievements, plan_name, total_amount, contact_consent_at, payment_status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'pending')`,
+                 website, achievements, plan_name, base_amount, gst_rate_bps, gst_amount, total_amount,
+                 contact_consent_at, payment_status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'pending')`,
                 [
                     registrationId,
                     input.nomineeName.trim(),
@@ -68,10 +82,20 @@ class NominationRepository {
                     input.website?.trim() || null,
                     input.achievements.trim(),
                     input.planName.trim(),
-                    input.totalAmount,
+                    gst.unitAmount,
+                    gst.gstRateBps,
+                    gst.gstAmount,
+                    gst.totalAmount,
                 ]
             );
-            return ok({ registrationId, totalAmount: input.totalAmount, paymentStatus: "pending" });
+            return ok({
+                registrationId,
+                subtotalAmount: gst.subtotalAmount,
+                gstAmount: gst.gstAmount,
+                gstRateBps: gst.gstRateBps,
+                totalAmount: gst.totalAmount,
+                paymentStatus: "pending",
+            });
         } catch (error) {
             if (isDuplicateKeyError(error)) return err(ERRORS.DUPLICATE_SUBMISSION);
             logger.error("Error creating nomination registration:", error);

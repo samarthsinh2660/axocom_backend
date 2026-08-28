@@ -17,7 +17,7 @@ const validInput = {
     website: "https://innovatex.in",
     achievements: "Built rural AI clinics across three districts.",
     planName: "Premium Nomination",
-    totalAmount: 1999900,
+    baseAmount: 1999900,
     contactConsent: true,
 };
 
@@ -47,8 +47,8 @@ describe("NominationRepository", () => {
     });
 
     it("rejects a non-positive or fractional amount", async () => {
-        for (const totalAmount of [0, -1, 999.5]) {
-            const result = await nominationRepository.create({ ...validInput, totalAmount });
+        for (const baseAmount of [0, -1, 999.5]) {
+            const result = await nominationRepository.create({ ...validInput, baseAmount });
             expect(result.isErr()).toBe(true);
             if (result.isErr()) expect(result.error).toBe(ERRORS.INVALID_NOMINATION_PLAN);
         }
@@ -126,6 +126,20 @@ describe("NominationRepository", () => {
 
         expect(result.isErr()).toBe(true);
         if (result.isErr()) expect(result.error).toBe(ERRORS.NOMINATION_NOT_FOUND);
+    });
+
+    it("adds GST on top of the listed plan price", async () => {
+        mockExecute.mockResolvedValue([{ affectedRows: 1 }, []]);
+
+        const result = await nominationRepository.create(validInput);
+
+        expect(result.isOk()).toBe(true);
+        if (result.isOk()) {
+            // 19,999 ex GST, 18% adds 3,599.82, charged 23,598.82
+            expect(result.value.subtotalAmount).toBe(1999900);
+            expect(result.value.gstAmount).toBe(359982);
+            expect(result.value.totalAmount).toBe(2359882);
+        }
     });
 
     it("sums paid revenue alongside the nomination count", async () => {

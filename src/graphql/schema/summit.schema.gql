@@ -20,6 +20,10 @@ type DelegatePassRegistration {
   audience: String!
   quantity: Int!
   unitAmount: Int!
+  unitGstAmount: Int!
+  subtotalAmount: Int!
+  gstRateBps: Int!
+  gstAmount: Int!
   totalAmount: Int!
   currency: String!
   gstNumber: String
@@ -45,6 +49,9 @@ type NominationRegistration {
   website: String
   achievements: String!
   planName: String!
+  baseAmount: Int!
+  gstRateBps: Int!
+  gstAmount: Int!
   totalAmount: Int!
   currency: String!
   contactConsentAt: DateTime!
@@ -69,8 +76,15 @@ type NominationRegistrationConnection {
   pagination: Pagination!
 }
 
+"""
+Amounts are in paise. Listed prices exclude GST; the server adds it, so
+totalAmount is what will actually be charged.
+"""
 type RegistrationResult {
   registrationId: ID!
+  subtotalAmount: Int!
+  gstAmount: Int!
+  gstRateBps: Int!
   totalAmount: Int!
   paymentStatus: PaymentStatus!
 }
@@ -97,6 +111,7 @@ input RegisterDelegatePassInput {
   passName: String!
   audience: String!
   quantity: Int!
+  """Listed price per pass in paise, exclusive of GST."""
   unitAmount: Int!
   gstNumber: String
   contactConsent: Boolean!
@@ -111,7 +126,8 @@ input RegisterNominationInput {
   website: String
   achievements: String!
   planName: String!
-  totalAmount: Int!
+  """Listed plan price in paise, exclusive of GST."""
+  baseAmount: Int!
   contactConsent: Boolean!
 }
 

@@ -55,7 +55,11 @@ const delegateRow = {
     audience: "Professionals",
     quantity: 2,
     unit_amount: 299900,
-    total_amount: 599800,
+    unit_gst_amount: 53982,
+    subtotal_amount: 599800,
+    gst_rate_bps: 1800,
+    gst_amount: 107964,
+    total_amount: 707764,
     currency: "INR",
     gst_number: "29ABCDE1234F1Z5",
     contact_consent_at: createdAt,
@@ -98,7 +102,11 @@ describe("SummitResolvers", () => {
             audience: "Professionals",
             quantity: 2,
             unitAmount: 299900,
-            totalAmount: 599800,
+            unitGstAmount: 53982,
+            subtotalAmount: 599800,
+            gstRateBps: 1800,
+            gstAmount: 107964,
+            totalAmount: 707764,
             currency: "INR",
             gstNumber: "29ABCDE1234F1Z5",
             contactConsentAt: createdAt,
@@ -121,7 +129,10 @@ describe("SummitResolvers", () => {
     it("allows registration without a session", async () => {
         mockDelegate.create.mockResolvedValue(ok({
             registrationId: "dlg_1",
-            totalAmount: 599800,
+            subtotalAmount: 599800,
+            gstAmount: 107964,
+            gstRateBps: 1800,
+            totalAmount: 707764,
             paymentStatus: "pending",
         }));
 
@@ -142,7 +153,10 @@ describe("SummitResolvers", () => {
 
         expect(result).toEqual({
             registrationId: "dlg_1",
-            totalAmount: 599800,
+            subtotalAmount: 599800,
+            gstAmount: 107964,
+            gstRateBps: 1800,
+            totalAmount: 707764,
             paymentStatus: "pending",
         });
     });

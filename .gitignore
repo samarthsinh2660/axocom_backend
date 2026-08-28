@@ -42,3 +42,7 @@ coverage/
 *.swp
 *.swo
 *.bak
+
+# Payment gateway key exports - never commit these
+rzp-key*.csv
+*key*.csv

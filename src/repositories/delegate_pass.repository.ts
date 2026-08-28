@@ -12,6 +12,7 @@ import { ERRORS, RequestError, isDuplicateKeyError } from "../utils/error";
 import createLogger from "../utils/logger";
 import { isValidNormalizedPhone, normalizeEmail, normalizePhone } from "../utils/normalize";
 import { buildPagination, clampPage, type Paginated } from "../utils/pagination";
+import { calculateGst } from "../utils/gst";
 
 const logger = createLogger("@delegate_pass.repository");
 
@@ -19,9 +20,19 @@ const MAX_QUANTITY = 10;
 const PAYMENT_STATUSES: PaymentStatus[] = ["pending", "paid", "failed", "refunded"];
 
 class DelegatePassRepository {
-    async create(
-        input: CreateDelegatePassInput
-    ): Promise<Result<{ registrationId: string; totalAmount: number; paymentStatus: string }, RequestError>> {
+    async create(input: CreateDelegatePassInput): Promise<
+        Result<
+            {
+                registrationId: string;
+                subtotalAmount: number;
+                gstAmount: number;
+                gstRateBps: number;
+                totalAmount: number;
+                paymentStatus: string;
+            },
+            RequestError
+        >
+    > {
         if (
             !input.fullName?.trim()
             || !input.designation?.trim()
@@ -50,14 +61,17 @@ class DelegatePassRepository {
         }
 
         const registrationId = `dlg_${randomBytes(9).toString("base64url")}`;
-        const totalAmount = input.unitAmount * input.quantity;
+        // Listed prices exclude GST; the server adds it so the client cannot
+        // decide the tax any more than it can decide the price.
+        const gst = calculateGst(input.unitAmount, input.quantity);
 
         try {
             await db.execute(
                 `INSERT INTO ${DELEGATE_PASS_REGISTRATIONS_TABLE}
                 (id, full_name, designation, organisation, email, normalized_email, phone, normalized_phone,
-                 pass_name, audience, quantity, unit_amount, total_amount, gst_number, contact_consent_at, payment_status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'pending')`,
+                 pass_name, audience, quantity, unit_amount, unit_gst_amount, subtotal_amount,
+                 gst_rate_bps, gst_amount, total_amount, gst_number, contact_consent_at, payment_status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'pending')`,
                 [
                     registrationId,
                     input.fullName.trim(),
@@ -70,12 +84,23 @@ class DelegatePassRepository {
                     input.passName.trim(),
                     input.audience.trim(),
                     input.quantity,
-                    input.unitAmount,
-                    totalAmount,
+                    gst.unitAmount,
+                    gst.unitGstAmount,
+                    gst.subtotalAmount,
+                    gst.gstRateBps,
+                    gst.gstAmount,
+                    gst.totalAmount,
                     input.gstNumber?.trim() || null,
                 ]
             );
-            return ok({ registrationId, totalAmount, paymentStatus: "pending" });
+            return ok({
+                registrationId,
+                subtotalAmount: gst.subtotalAmount,
+                gstAmount: gst.gstAmount,
+                gstRateBps: gst.gstRateBps,
+                totalAmount: gst.totalAmount,
+                paymentStatus: "pending",
+            });
         } catch (error) {
             if (isDuplicateKeyError(error)) return err(ERRORS.DUPLICATE_SUBMISSION);
             logger.error("Error creating delegate pass registration:", error);

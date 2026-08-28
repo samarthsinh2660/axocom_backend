@@ -16,6 +16,9 @@ CREATE TABLE IF NOT EXISTS nomination_registrations (
     website VARCHAR(500),
     achievements TEXT NOT NULL,
     plan_name VARCHAR(255) NOT NULL,
+    base_amount BIGINT NOT NULL,
+    gst_rate_bps INT NOT NULL DEFAULT 1800,
+    gst_amount BIGINT NOT NULL DEFAULT 0,
     total_amount BIGINT NOT NULL,
     currency VARCHAR(3) NOT NULL DEFAULT 'INR',
     contact_consent_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -50,6 +53,11 @@ export interface NominationRegistrationRow extends RowDataPacket {
     website: string | null;
     achievements: string;
     plan_name: string;
+    /** Listed plan price, exclusive of GST. */
+    base_amount: number;
+    gst_rate_bps: number;
+    gst_amount: number;
+    /** base_amount + gst_amount. This is what is charged. */
     total_amount: number;
     currency: string;
     contact_consent_at: Date;
@@ -74,6 +82,7 @@ export type CreateNominationInput = {
     website?: string | null;
     achievements: string;
     planName: string;
-    totalAmount: number;
+    /** Listed plan price, exclusive of GST. The server adds GST. */
+    baseAmount: number;
     contactConsent: boolean;
 };

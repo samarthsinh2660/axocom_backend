@@ -50,14 +50,33 @@ describe("DelegatePassRepository", () => {
      * The client sends a unit price, never a total. If the total were taken from
      * the request a 24,999 rupee pass could be bought for one rupee.
      */
-    it("derives the total server-side from unit amount and quantity", async () => {
+    it("derives the total server-side from unit amount, quantity and GST", async () => {
         mockExecute.mockResolvedValue([{ affectedRows: 1 }, []]);
 
         const result = await delegatePassRepository.create(validInput);
 
         expect(result.isOk()).toBe(true);
-        if (result.isOk()) expect(result.value.totalAmount).toBe(599800);
-        expect(mockExecute.mock.calls[0][1]).toEqual(expect.arrayContaining([299900, 599800]));
+        if (result.isOk()) {
+            // 2999 x 2 = 5998 ex GST, 18% adds 1079.64, charged 7077.64
+            expect(result.value.subtotalAmount).toBe(599800);
+            expect(result.value.gstAmount).toBe(107964);
+            expect(result.value.gstRateBps).toBe(1800);
+            expect(result.value.totalAmount).toBe(707764);
+        }
+    });
+
+    /**
+     * GST is charged per pass and then multiplied, the way an invoice line
+     * works, so the stored per-unit figure reconciles against the invoice.
+     */
+    it("charges GST per pass rather than on the combined subtotal", async () => {
+        mockExecute.mockResolvedValue([{ affectedRows: 1 }, []]);
+
+        await delegatePassRepository.create({ ...validInput, quantity: 3 });
+
+        const params = mockExecute.mock.calls[0][1];
+        // unit 299900, unit GST 53982, subtotal 899700, GST 161946, total 1061646
+        expect(params).toEqual(expect.arrayContaining([299900, 53982, 899700, 1800, 161946, 1061646]));
     });
 
     it("rejects a quantity outside the supported range", async () => {
