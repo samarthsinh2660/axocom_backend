@@ -144,9 +144,7 @@ describe("SummitResolvers", () => {
                 email: "asha@example.com",
                 phone: "9876543210",
                 passName: "Professional Pass",
-                audience: "Professionals",
                 quantity: 2,
-                unitAmount: 299900,
                 contactConsent: true,
             },
         });

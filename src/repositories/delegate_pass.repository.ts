@@ -13,6 +13,7 @@ import createLogger from "../utils/logger";
 import { isValidNormalizedPhone, normalizeEmail, normalizePhone } from "../utils/normalize";
 import { buildPagination, clampPage, type Paginated } from "../utils/pagination";
 import { calculateGst } from "../utils/gst";
+import { findDelegatePass } from "../config/pricing";
 
 const logger = createLogger("@delegate_pass.repository");
 
@@ -40,7 +41,6 @@ class DelegatePassRepository {
             || !input.email?.trim()
             || !input.phone?.trim()
             || !input.passName?.trim()
-            || !input.audience?.trim()
             || input.contactConsent !== true
         ) {
             return err(ERRORS.INVALID_REQUEST_BODY);
@@ -50,9 +50,9 @@ class DelegatePassRepository {
             return err(ERRORS.INVALID_QUANTITY);
         }
 
-        if (!Number.isInteger(input.unitAmount) || input.unitAmount <= 0) {
-            return err(ERRORS.INVALID_PASS_SELECTION);
-        }
+        // The price comes from the server's own list, never from the request.
+        const pass = findDelegatePass(input.passName);
+        if (!pass) return err(ERRORS.INVALID_PASS_SELECTION);
 
         const normalizedEmail = normalizeEmail(input.email);
         const normalizedPhone = normalizePhone(input.phone);
@@ -63,7 +63,7 @@ class DelegatePassRepository {
         const registrationId = `dlg_${randomBytes(9).toString("base64url")}`;
         // Listed prices exclude GST; the server adds it so the client cannot
         // decide the tax any more than it can decide the price.
-        const gst = calculateGst(input.unitAmount, input.quantity);
+        const gst = calculateGst(pass.unitAmount, input.quantity);
 
         try {
             await db.execute(
@@ -81,8 +81,8 @@ class DelegatePassRepository {
                     normalizedEmail,
                     input.phone.trim(),
                     normalizedPhone,
-                    input.passName.trim(),
-                    input.audience.trim(),
+                    pass.name,
+                    pass.audience,
                     input.quantity,
                     gst.unitAmount,
                     gst.unitGstAmount,
@@ -243,6 +243,49 @@ class DelegatePassRepository {
             return ok(true);
         } catch (error) {
             logger.error("Error marking delegate pass paid:", error);
+            return err(ERRORS.DATABASE_ERROR);
+        }
+    }
+
+
+    /**
+     * Settles a payment that Razorpay has captured but we never recorded,
+     * because the browser never made it back to verifyPayment.
+     *
+     * There is no signature to check here - no checkout callback ever arrived -
+     * so the signature column is left null and the admin is recorded instead.
+     * That keeps the two routes distinguishable after the fact: a signed
+     * customer callback versus a human settling it against the gateway.
+     */
+    async markPaidFromGateway(
+        id: string,
+        payment: { orderId: string; paymentId: string },
+        adminId: number
+    ): Promise<Result<true, RequestError>> {
+        const existing = await this.getById(id);
+        if (existing.isErr()) return err(existing.error);
+        if (existing.value.payment_status === "paid") return err(ERRORS.PAYMENT_ALREADY_COMPLETED);
+        if (existing.value.razorpay_order_id !== payment.orderId) {
+            return err(ERRORS.PAYMENT_ORDER_MISMATCH);
+        }
+
+        try {
+            const [result] = await db.execute<ResultSetHeader>(
+                `UPDATE ${DELEGATE_PASS_REGISTRATIONS_TABLE}
+                 SET payment_status = 'paid',
+                     razorpay_payment_id = ?,
+                     razorpay_signature = NULL,
+                     paid_at = NOW(),
+                     reviewed_at = NOW(),
+                     reviewed_by_admin_id = ?,
+                     admin_note = CONCAT(COALESCE(admin_note, ''), ' [settled from gateway reconciliation]')
+                 WHERE id = ? AND razorpay_order_id = ? AND payment_status <> 'paid'`,
+                [payment.paymentId, adminId, id, payment.orderId]
+            );
+            if (result.affectedRows === 0) return err(ERRORS.PAYMENT_ALREADY_COMPLETED);
+            return ok(true);
+        } catch (error) {
+            logger.error("Error settling payment from gateway:", error);
             return err(ERRORS.DATABASE_ERROR);
         }
     }

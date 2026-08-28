@@ -93,10 +93,9 @@ export type CreateDelegatePassInput = {
     organisation: string;
     email: string;
     phone: string;
+    /** Must match a pass in config/pricing; the price is looked up there. */
     passName: string;
-    audience: string;
     quantity: number;
-    unitAmount: number;
     gstNumber?: string | null;
     contactConsent: boolean;
 };

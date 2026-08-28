@@ -13,6 +13,7 @@ import createLogger from "../utils/logger";
 import { isValidNormalizedPhone, normalizeEmail, normalizePhone } from "../utils/normalize";
 import { buildPagination, clampPage, type Paginated } from "../utils/pagination";
 import { calculateGst } from "../utils/gst";
+import { findNominationPlan } from "../config/pricing";
 
 const logger = createLogger("@nomination.repository");
 
@@ -45,9 +46,9 @@ class NominationRepository {
             return err(ERRORS.INVALID_REQUEST_BODY);
         }
 
-        if (!Number.isInteger(input.baseAmount) || input.baseAmount <= 0) {
-            return err(ERRORS.INVALID_NOMINATION_PLAN);
-        }
+        // The price comes from the server's own list, never from the request.
+        const plan = findNominationPlan(input.planName);
+        if (!plan) return err(ERRORS.INVALID_NOMINATION_PLAN);
 
         if (input.website && !/^https?:\/\//i.test(input.website.trim())) {
             return err(new RequestError("Website or profile URL must start with http:// or https://", 10002, 400));
@@ -61,7 +62,7 @@ class NominationRepository {
 
         const registrationId = `nom_${randomBytes(9).toString("base64url")}`;
         // A nomination is a single item, so quantity is always one.
-        const gst = calculateGst(input.baseAmount, 1);
+        const gst = calculateGst(plan.baseAmount, 1);
 
         try {
             await db.execute(
@@ -81,7 +82,7 @@ class NominationRepository {
                     normalizedPhone,
                     input.website?.trim() || null,
                     input.achievements.trim(),
-                    input.planName.trim(),
+                    plan.name,
                     gst.unitAmount,
                     gst.gstRateBps,
                     gst.gstAmount,
@@ -234,6 +235,49 @@ class NominationRepository {
             return ok(true);
         } catch (error) {
             logger.error("Error marking nomination paid:", error);
+            return err(ERRORS.DATABASE_ERROR);
+        }
+    }
+
+
+    /**
+     * Settles a payment that Razorpay has captured but we never recorded,
+     * because the browser never made it back to verifyPayment.
+     *
+     * There is no signature to check here - no checkout callback ever arrived -
+     * so the signature column is left null and the admin is recorded instead.
+     * That keeps the two routes distinguishable after the fact: a signed
+     * customer callback versus a human settling it against the gateway.
+     */
+    async markPaidFromGateway(
+        id: string,
+        payment: { orderId: string; paymentId: string },
+        adminId: number
+    ): Promise<Result<true, RequestError>> {
+        const existing = await this.getById(id);
+        if (existing.isErr()) return err(existing.error);
+        if (existing.value.payment_status === "paid") return err(ERRORS.PAYMENT_ALREADY_COMPLETED);
+        if (existing.value.razorpay_order_id !== payment.orderId) {
+            return err(ERRORS.PAYMENT_ORDER_MISMATCH);
+        }
+
+        try {
+            const [result] = await db.execute<ResultSetHeader>(
+                `UPDATE ${NOMINATION_REGISTRATIONS_TABLE}
+                 SET payment_status = 'paid',
+                     razorpay_payment_id = ?,
+                     razorpay_signature = NULL,
+                     paid_at = NOW(),
+                     reviewed_at = NOW(),
+                     reviewed_by_admin_id = ?,
+                     admin_note = CONCAT(COALESCE(admin_note, ''), ' [settled from gateway reconciliation]')
+                 WHERE id = ? AND razorpay_order_id = ? AND payment_status <> 'paid'`,
+                [payment.paymentId, adminId, id, payment.orderId]
+            );
+            if (result.affectedRows === 0) return err(ERRORS.PAYMENT_ALREADY_COMPLETED);
+            return ok(true);
+        } catch (error) {
+            logger.error("Error settling payment from gateway:", error);
             return err(ERRORS.DATABASE_ERROR);
         }
     }

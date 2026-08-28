@@ -18,6 +18,7 @@ import { notFoundHandler } from './middleware/error.middleware';
 import { optionalAuth } from './middleware/auth.middleware';
 import { createLoaders } from './graphql/loaders/dataloader';
 import voterRoutes from './rest/routes/voter.route';
+import { isTestPricingActive } from './config/pricing';
 // async function startGraphQLServer() {
 //     const typeDefs = readFileSync(
 //         join(process.cwd(), 'src/graphql/schema/candidate.schema.graphql'),
@@ -93,6 +94,16 @@ async function startServer() {
     );
 
     await connectToDatabase();
+
+    // Test pricing silently rewrites every amount, so it must never be the
+    // thing nobody noticed: say so loudly on every boot.
+    if (isTestPricingActive()) {
+        console.warn(
+            '\n*** TEST PRICING ACTIVE - every pass and plan is charged as PAYMENT_TEST_AMOUNT_PAISE. ***\n'
+            + '*** Real money still moves if RAZORPAY_KEY_ID is a live key. Unset it for real prices. ***\n'
+        );
+    }
+
     httpServer.listen(PORT);
     console.log(`Server is running on port ${PORT}`);
     console.log(`GraphQL endpoint is running on http://localhost:${PORT}/graphql`);

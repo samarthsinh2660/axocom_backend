@@ -2,6 +2,15 @@ import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { delegatePassRepository } from "./delegate_pass.repository";
 import { ERRORS } from "../utils/error";
 
+// Pinned so the suite never depends on the developer's own .env - a local
+// PAYMENT_TEST_AMOUNT_PAISE or GST_RATE_BPS would otherwise rewrite every
+// amount asserted below.
+jest.mock("../config/env", () => ({
+    NODE_ENV: "test",
+    PAYMENT_TEST_AMOUNT_PAISE: undefined,
+    GST_RATE_BPS: "1800",
+}));
+
 const mockExecute = jest.fn<(...args: any[]) => Promise<any>>();
 
 jest.mock("../dataconfig/db", () => ({
@@ -15,9 +24,7 @@ const validInput = {
     email: " ASHA@Example.COM ",
     phone: "+91 98765-43210",
     passName: "Professional Pass",
-    audience: "Professionals",
     quantity: 2,
-    unitAmount: 299900,
     gstNumber: "29ABCDE1234F1Z5",
     contactConsent: true,
 };
@@ -88,11 +95,49 @@ describe("DelegatePassRepository", () => {
         expect(mockExecute).not.toHaveBeenCalled();
     });
 
-    it("rejects a non-positive or fractional unit amount", async () => {
-        for (const unitAmount of [0, -100, 1999.5]) {
-            const result = await delegatePassRepository.create({ ...validInput, unitAmount });
+    /**
+     * The price is not accepted from the caller at all - it is looked up from
+     * the server's list by pass name, so a VIP pass cannot be registered at a
+     * startup pass price.
+     */
+    it("prices from the server list and ignores any amount in the request", async () => {
+        mockExecute.mockResolvedValue([{ affectedRows: 1 }, []]);
+
+        const result = await delegatePassRepository.create({
+            ...validInput,
+            passName: "VIP Pass",
+            quantity: 1,
+            // A tampered client sending its own price has no effect.
+            unitAmount: 100,
+            audience: "Startups",
+        } as never);
+
+        expect(result.isOk()).toBe(true);
+        if (result.isOk()) {
+            expect(result.value.subtotalAmount).toBe(2499900); // 24,999 from the list
+            expect(result.value.totalAmount).toBe(2949882);    // + 18% GST
+        }
+        // audience is taken from the list too, not from the request
+        expect(mockExecute.mock.calls[0][1]).toEqual(expect.arrayContaining(["VIP Pass", "VIP"]));
+    });
+
+    it("rejects a pass name that is not on the price list", async () => {
+        // Case matters: the lookup is exact, not fuzzy. Asserting the specific
+        // error keeps this honest - a blank name is rejected by the required
+        // field guard instead, which would pass even without a price list.
+        for (const passName of ["Free Pass", "professional pass", "VIP"]) {
+            const result = await delegatePassRepository.create({ ...validInput, passName });
             expect(result.isErr()).toBe(true);
             if (result.isErr()) expect(result.error).toBe(ERRORS.INVALID_PASS_SELECTION);
+        }
+        expect(mockExecute).not.toHaveBeenCalled();
+    });
+
+    it("rejects a blank pass name as a missing field", async () => {
+        for (const passName of ["", "   "]) {
+            const result = await delegatePassRepository.create({ ...validInput, passName });
+            expect(result.isErr()).toBe(true);
+            if (result.isErr()) expect(result.error).toBe(ERRORS.INVALID_REQUEST_BODY);
         }
         expect(mockExecute).not.toHaveBeenCalled();
     });

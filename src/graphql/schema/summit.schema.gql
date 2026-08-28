@@ -108,12 +108,20 @@ input RegisterDelegatePassInput {
   organisation: String!
   email: String!
   phone: String!
+  """Must match a pass name on the server's price list."""
   passName: String!
-  audience: String!
   quantity: Int!
-  """Listed price per pass in paise, exclusive of GST."""
-  unitAmount: Int!
   gstNumber: String
+  """
+  Ignored. The price and audience now come from the server's price list.
+  Kept optional so a frontend deployed before this change keeps working -
+  GraphQL rejects the whole mutation for an undefined input field, so removing
+  these outright would fail every registration until both sides ship.
+  Safe to delete once no deployed client sends them.
+  """
+  audience: String
+  """Ignored. See `audience`."""
+  unitAmount: Int
   contactConsent: Boolean!
 }
 
@@ -125,10 +133,15 @@ input RegisterNominationInput {
   phone: String!
   website: String
   achievements: String!
+  """Must match a plan name on the server's price list."""
   planName: String!
-  """Listed plan price in paise, exclusive of GST."""
-  baseAmount: Int!
   contactConsent: Boolean!
+  """
+  Ignored. The price now comes from the server's price list. Kept optional so a
+  frontend deployed before this change keeps working. Safe to delete once no
+  deployed client sends it.
+  """
+  baseAmount: Int
 }
 
 input UpdatePaymentStatusInput {

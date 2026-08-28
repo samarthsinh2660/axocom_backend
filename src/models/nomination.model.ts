@@ -81,8 +81,7 @@ export type CreateNominationInput = {
     phone: string;
     website?: string | null;
     achievements: string;
+    /** Must match a plan in config/pricing; the price is looked up there. */
     planName: string;
-    /** Listed plan price, exclusive of GST. The server adds GST. */
-    baseAmount: number;
     contactConsent: boolean;
 };

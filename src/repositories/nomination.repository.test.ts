@@ -2,6 +2,15 @@ import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { nominationRepository } from "./nomination.repository";
 import { ERRORS } from "../utils/error";
 
+// Pinned so the suite never depends on the developer's own .env - a local
+// PAYMENT_TEST_AMOUNT_PAISE or GST_RATE_BPS would otherwise rewrite every
+// amount asserted below.
+jest.mock("../config/env", () => ({
+    NODE_ENV: "test",
+    PAYMENT_TEST_AMOUNT_PAISE: undefined,
+    GST_RATE_BPS: "1800",
+}));
+
 const mockExecute = jest.fn<(...args: any[]) => Promise<any>>();
 
 jest.mock("../dataconfig/db", () => ({
@@ -17,7 +26,6 @@ const validInput = {
     website: "https://innovatex.in",
     achievements: "Built rural AI clinics across three districts.",
     planName: "Premium Nomination",
-    baseAmount: 1999900,
     contactConsent: true,
 };
 
@@ -46,9 +54,23 @@ describe("NominationRepository", () => {
         ]));
     });
 
-    it("rejects a non-positive or fractional amount", async () => {
-        for (const baseAmount of [0, -1, 999.5]) {
-            const result = await nominationRepository.create({ ...validInput, baseAmount });
+    it("prices from the server list and ignores any amount in the request", async () => {
+        mockExecute.mockResolvedValue([{ affectedRows: 1 }, []]);
+
+        const result = await nominationRepository.create({
+            ...validInput,
+            planName: "Platinum Nomination",
+            baseAmount: 100,
+        } as never);
+
+        expect(result.isOk()).toBe(true);
+        if (result.isOk()) expect(result.value.subtotalAmount).toBe(3499900); // 34,999 from the list
+    });
+
+    it("rejects a plan name that is not on the price list", async () => {
+        // Case matters: the lookup is exact, not fuzzy.
+        for (const planName of ["Free Nomination", "premium nomination"]) {
+            const result = await nominationRepository.create({ ...validInput, planName });
             expect(result.isErr()).toBe(true);
             if (result.isErr()) expect(result.error).toBe(ERRORS.INVALID_NOMINATION_PLAN);
         }
