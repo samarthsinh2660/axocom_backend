@@ -66,6 +66,8 @@ describe("RefundRequestRepository", () => {
      * actually asked for.
      */
     it("creates the ticket and seeds the thread with the reason in one transaction", async () => {
+        // The reference is checked against the registration table first.
+        mockExecute.mockResolvedValue([[{ id: "dlg_abc123" }], []]);
         mockConnectionExecute.mockResolvedValue([{ affectedRows: 1 }, []]);
 
         const result = await refundRequestRepository.create(validInput);
@@ -89,6 +91,7 @@ describe("RefundRequestRepository", () => {
     });
 
     it("rolls back and releases the connection when the insert fails", async () => {
+        mockExecute.mockResolvedValue([[{ id: "dlg_abc123" }], []]);
         mockConnectionExecute.mockRejectedValue(new Error("deadlock"));
 
         const result = await refundRequestRepository.create(validInput);
@@ -98,6 +101,31 @@ describe("RefundRequestRepository", () => {
         expect(mockRollback).toHaveBeenCalledTimes(1);
         expect(mockCommit).not.toHaveBeenCalled();
         expect(mockRelease).toHaveBeenCalledTimes(1);
+    });
+
+    /**
+     * A reference that is not theirs must not open a ticket - otherwise a
+     * refund could be filed against a stranger's registration.
+     */
+    it("refuses a registration reference that does not belong to the filer", async () => {
+        mockExecute.mockResolvedValue([[], []]);
+
+        const result = await refundRequestRepository.create(validInput);
+
+        expect(result.isErr()).toBe(true);
+        if (result.isErr()) expect(result.error).toBe(ERRORS.REFUND_REGISTRATION_MISMATCH);
+        expect(mockBeginTransaction).not.toHaveBeenCalled();
+    });
+
+    it("requires a registration reference", async () => {
+        const result = await refundRequestRepository.create({
+            ...validInput,
+            registrationId: "   ",
+        });
+
+        expect(result.isErr()).toBe(true);
+        if (result.isErr()) expect(result.error).toBe(ERRORS.REFUND_REGISTRATION_REQUIRED);
+        expect(mockExecute).not.toHaveBeenCalled();
     });
 
     it("requires a reason", async () => {

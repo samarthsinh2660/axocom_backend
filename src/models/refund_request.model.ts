@@ -86,7 +86,8 @@ export type CreateRefundRequestInput = {
     email: string;
     phone: string;
     registrationType: RefundRegistrationType;
-    registrationId?: string | null;
+    /** Required, and must belong to the email filing the request. */
+    registrationId: string;
     paymentReference?: string | null;
     reason: string;
 };

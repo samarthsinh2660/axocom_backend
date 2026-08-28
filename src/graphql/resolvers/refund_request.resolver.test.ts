@@ -104,6 +104,7 @@ describe("RefundRequestResolvers", () => {
                 email: "asha@example.com",
                 phone: "9876543210",
                 registrationType: "delegate_pass",
+                registrationId: "dlg_1",
                 reason: "Cannot attend",
             },
         });

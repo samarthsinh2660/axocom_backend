@@ -72,7 +72,12 @@ input CreateRefundRequestInput {
   email: String!
   phone: String!
   registrationType: RefundRegistrationType!
-  registrationId: String
+  """
+  The dlg_/nom_ reference from the registration. Required, and checked against
+  the email above so a ticket cannot be opened on someone else's registration.
+  """
+  registrationId: String!
+  """Optional. The Razorpay payment id, as a secondary hint for support."""
   paymentReference: String
   reason: String!
 }

@@ -12,6 +12,8 @@ import {
     type RefundRequestRow,
     type RefundStatus,
 } from "../models/refund_request.model";
+import { DELEGATE_PASS_REGISTRATIONS_TABLE } from "../models/delegate_pass.model";
+import { NOMINATION_REGISTRATIONS_TABLE } from "../models/nomination.model";
 import { ERRORS, RequestError } from "../utils/error";
 import createLogger from "../utils/logger";
 import { isValidNormalizedPhone, normalizeEmail, normalizePhone } from "../utils/normalize";
@@ -20,6 +22,11 @@ import { buildPagination, clampPage, type Paginated } from "../utils/pagination"
 const logger = createLogger("@refund_request.repository");
 
 const REGISTRATION_TYPES = ["delegate_pass", "nomination"];
+
+const REGISTRATION_TABLES: Record<string, string> = {
+    delegate_pass: DELEGATE_PASS_REGISTRATIONS_TABLE,
+    nomination: NOMINATION_REGISTRATIONS_TABLE,
+};
 
 function newMessageId() {
     return `rmsg_${randomBytes(9).toString("base64url")}`;
@@ -42,11 +49,31 @@ class RefundRequestRepository {
         if (!REGISTRATION_TYPES.includes(input.registrationType)) {
             return err(ERRORS.INVALID_REGISTRATION_TYPE);
         }
+        // Without a reference there is nothing tying the ticket to a
+        // registration, so an admin has no reliable way to find what to refund.
+        const registrationId = input.registrationId?.trim();
+        if (!registrationId) return err(ERRORS.REFUND_REGISTRATION_REQUIRED);
 
         const normalizedEmail = normalizeEmail(input.email);
         const normalizedPhone = normalizePhone(input.phone);
         if (!isValidNormalizedPhone(normalizedPhone)) {
             return err(new RequestError("A valid 10-digit mobile number is required", 10002, 400));
+        }
+
+        // The reference must belong to the person filing. Checking the email
+        // too stops a ticket being opened against someone else's registration,
+        // and the shared error message avoids confirming whether a reference
+        // someone guessed actually exists.
+        try {
+            const [owned] = await db.execute<RefundRequestRow[]>(
+                `SELECT id FROM ${REGISTRATION_TABLES[input.registrationType]}
+                 WHERE id = ? AND normalized_email = ?`,
+                [registrationId, normalizedEmail]
+            );
+            if (!owned[0]) return err(ERRORS.REFUND_REGISTRATION_MISMATCH);
+        } catch (error) {
+            logger.error("Error validating refund registration reference:", error);
+            return err(ERRORS.DATABASE_ERROR);
         }
 
         const ticketId = `rfd_${randomBytes(9).toString("base64url")}`;
@@ -68,7 +95,7 @@ class RefundRequestRepository {
                     input.phone.trim(),
                     normalizedPhone,
                     input.registrationType,
-                    input.registrationId?.trim() || null,
+                    registrationId,
                     input.paymentReference?.trim() || null,
                     reason,
                 ]
