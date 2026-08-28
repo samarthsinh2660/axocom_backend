@@ -185,10 +185,13 @@ describe("PaymentResolvers.verifyPayment", () => {
 
         const result = await paymentResolvers.Mutation.verifyPayment(null, { input: validPayment });
 
+        // The gateway references come back so the payer can be shown a receipt.
         expect(result).toEqual({
             verified: true,
             registrationId: "dlg_1",
             paymentStatus: "paid",
+            razorpayOrderId: "order_ABC123",
+            razorpayPaymentId: "pay_XYZ789",
         });
         expect(mockDelegate.markPaid).toHaveBeenCalledWith("dlg_1", {
             orderId: "order_ABC123",

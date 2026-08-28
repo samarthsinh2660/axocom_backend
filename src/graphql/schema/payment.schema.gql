@@ -28,6 +28,39 @@ type PaymentVerificationResult {
   verified: Boolean!
   registrationId: ID!
   paymentStatus: PaymentStatus!
+  """Shown on the receipt so a support query can be traced without a hunt."""
+  razorpayPaymentId: String
+  razorpayOrderId: String
+}
+
+"""One payment Razorpay holds against an order. `captured` is the only status
+where the money is actually ours; `authorized` is held but not taken."""
+type GatewayPayment {
+  paymentId: String!
+  status: String!
+  amount: Int!
+  method: String
+  email: String
+  contact: String
+}
+
+"""
+What Razorpay says actually happened, next to what we recorded. This is the
+answer to "the customer says they paid": our own record only reflects what the
+browser managed to report back.
+"""
+type PaymentReconciliation {
+  registrationId: ID!
+  ourPaymentStatus: PaymentStatus!
+  ourAmount: Int!
+  orderId: String!
+  orderStatus: String!
+  orderAmount: Int!
+  amountPaid: Int!
+  payments: [GatewayPayment!]!
+  capturedPayment: GatewayPayment
+  """True when the gateway captured money we never recorded - safe to settle."""
+  settleable: Boolean!
 }
 
 input VerifyPaymentInput {
@@ -53,4 +86,23 @@ extend type Mutation {
   error and leaves the registration untouched if the signature does not match.
   """
   verifyPayment(input: VerifyPaymentInput!): PaymentVerificationResult!
+
+  """
+  Asks Razorpay what happened to this registration's order. Read-only, so it is
+  safe to run against any claim. A fabricated payment simply will not be there.
+  """
+  reconcilePayment(
+    registrationType: PaymentRegistrationType!
+    registrationId: ID!
+  ): PaymentReconciliation!
+
+  """
+  Marks a registration paid using a payment Razorpay has captured but we never
+  recorded. Re-checks the gateway itself, so it cannot be used to mark something
+  paid on an admin's say-so.
+  """
+  settlePaymentFromGateway(
+    registrationType: PaymentRegistrationType!
+    registrationId: ID!
+  ): PaymentReconciliation!
 }

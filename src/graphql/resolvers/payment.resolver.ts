@@ -1,3 +1,4 @@
+import type { GraphQLContext } from "../context";
 import { toGraphQLError } from "../context";
 import { delegatePassRepository } from "../../repositories/delegate_pass.repository";
 import { nominationRepository } from "../../repositories/nomination.repository";
@@ -6,8 +7,10 @@ import createLogger from "../../utils/logger";
 import {
     createRazorpayOrder,
     getRazorpayKeyId,
+    reconcileOrder,
     verifyPaymentSignature,
 } from "../../utils/razorpay";
+import { requireAdmin } from "../context";
 
 const logger = createLogger("@payment.resolver");
 
@@ -27,6 +30,7 @@ async function loadRegistration(registrationType: RegistrationType, registration
             amount: Number(row.total_amount),
             currency: row.currency,
             paymentStatus: row.payment_status,
+            razorpayOrderId: row.razorpay_order_id,
             name: row.full_name,
             email: row.email,
             phone: row.phone,
@@ -40,6 +44,7 @@ async function loadRegistration(registrationType: RegistrationType, registration
         amount: Number(row.total_amount),
         currency: row.currency,
         paymentStatus: row.payment_status,
+        razorpayOrderId: row.razorpay_order_id,
         name: row.nominee_name,
         email: row.email,
         phone: row.phone,
@@ -48,6 +53,37 @@ async function loadRegistration(registrationType: RegistrationType, registration
 
 const repositoryFor = (registrationType: RegistrationType) =>
     registrationType === "delegate_pass" ? delegatePassRepository : nominationRepository;
+
+async function buildReconciliation(
+    registrationType: RegistrationType,
+    registrationId: string
+) {
+    const registration = await loadRegistration(registrationType, registrationId);
+    if (!registration.razorpayOrderId) throw toGraphQLError(ERRORS.PAYMENT_ORDER_MISSING);
+
+    let gateway;
+    try {
+        gateway = await reconcileOrder(registration.razorpayOrderId);
+    } catch (error) {
+        if (isRequestError(error)) throw toGraphQLError(error);
+        logger.error("Unexpected error reconciling payment:", error);
+        throw toGraphQLError(ERRORS.RAZORPAY_ORDER_FAILED);
+    }
+
+    return {
+        registrationId,
+        ourPaymentStatus: registration.paymentStatus,
+        ourAmount: registration.amount,
+        orderId: gateway.orderId,
+        orderStatus: gateway.orderStatus,
+        orderAmount: gateway.orderAmount,
+        amountPaid: gateway.amountPaid,
+        payments: gateway.payments,
+        capturedPayment: gateway.capturedPayment,
+        // Money at the gateway that our own record is missing.
+        settleable: gateway.capturedPayment !== null && registration.paymentStatus !== "paid",
+    };
+}
 
 export const paymentResolvers = {
     Mutation: {
@@ -95,6 +131,55 @@ export const paymentResolvers = {
                 prefillEmail: registration.email,
                 prefillContact: registration.phone,
             };
+        },
+
+        /**
+         * Read-only: reports what Razorpay holds against this registration's
+         * order. Never writes, so it is safe to run on any claim - including a
+         * fabricated one, which simply comes back with no matching payment.
+         */
+        reconcilePayment: async (
+            _: unknown,
+            args: { registrationType: RegistrationType; registrationId: string },
+            context: GraphQLContext
+        ) => {
+            requireAdmin(context);
+            return buildReconciliation(args.registrationType, args.registrationId);
+        },
+
+        settlePaymentFromGateway: async (
+            _: unknown,
+            args: { registrationType: RegistrationType; registrationId: string },
+            context: GraphQLContext
+        ) => {
+            const admin = requireAdmin(context);
+            const { registrationType, registrationId } = args;
+
+            // Re-checks the gateway rather than trusting a prior read, so this
+            // cannot settle anything Razorpay has not actually captured.
+            const reconciliation = await buildReconciliation(registrationType, registrationId);
+            if (!reconciliation.settleable || !reconciliation.capturedPayment) {
+                throw toGraphQLError(
+                    reconciliation.ourPaymentStatus === "paid"
+                        ? ERRORS.PAYMENT_ALREADY_COMPLETED
+                        : ERRORS.PAYMENT_NOT_CAPTURED
+                );
+            }
+
+            const settled = await repositoryFor(registrationType).markPaidFromGateway(
+                registrationId,
+                {
+                    orderId: reconciliation.orderId,
+                    paymentId: reconciliation.capturedPayment.paymentId,
+                },
+                admin.id
+            );
+            if (settled.isErr()) throw toGraphQLError(settled.error);
+
+            logger.info(
+                `Admin ${admin.id} settled ${registrationType} ${registrationId} from gateway payment ${reconciliation.capturedPayment.paymentId}`
+            );
+            return buildReconciliation(registrationType, registrationId);
         },
 
         verifyPayment: async (
@@ -146,6 +231,8 @@ export const paymentResolvers = {
                 verified: true,
                 registrationId: input.registrationId,
                 paymentStatus: "paid",
+                razorpayPaymentId: input.razorpayPaymentId,
+                razorpayOrderId: input.razorpayOrderId,
             };
         },
     },

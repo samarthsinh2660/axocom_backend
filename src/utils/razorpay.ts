@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import Razorpay from "razorpay";
 import { RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET } from "../config/env";
-import { ERRORS, RequestError } from "./error";
+import { ERRORS, RequestError, isRequestError } from "./error";
 import createLogger from "./logger";
 
 const logger = createLogger("@razorpay");
@@ -112,3 +112,73 @@ export function verifyPaymentSignature(input: {
 }
 
 export type { RequestError };
+
+export type GatewayPayment = {
+    paymentId: string;
+    status: string;
+    amount: number;
+    method: string | null;
+    email: string | null;
+    contact: string | null;
+    createdAt: number | null;
+};
+
+export type OrderReconciliation = {
+    orderId: string;
+    orderStatus: string;
+    orderAmount: number;
+    amountPaid: number;
+    payments: GatewayPayment[];
+    capturedPayment: GatewayPayment | null;
+};
+
+/**
+ * Asks Razorpay what actually happened to an order.
+ *
+ * This is the answer to "the customer says they paid". Our own database only
+ * records what the browser managed to report back, so a payment made in a tab
+ * that closed before verification looks identical to one that never happened -
+ * and identical to a fabricated claim. Only the gateway knows which it is.
+ */
+export async function reconcileOrder(orderId: string): Promise<OrderReconciliation> {
+    if (!orderId) throw ERRORS.PAYMENT_ORDER_MISSING;
+
+    try {
+        const client = getRazorpayClient();
+        const [order, paymentList] = await Promise.all([
+            client.orders.fetch(orderId),
+            client.orders.fetchPayments(orderId),
+        ]);
+
+        const payments: GatewayPayment[] = (paymentList?.items ?? []).map((item: any) => ({
+            paymentId: String(item.id),
+            status: String(item.status),
+            amount: Number(item.amount),
+            method: item.method ? String(item.method) : null,
+            email: item.email ? String(item.email) : null,
+            contact: item.contact ? String(item.contact) : null,
+            createdAt: item.created_at ? Number(item.created_at) : null,
+        }));
+
+        return {
+            orderId: String(order.id),
+            orderStatus: String(order.status),
+            orderAmount: Number(order.amount),
+            amountPaid: Number(order.amount_paid ?? 0),
+            payments,
+            // "captured" is the only status where the money is actually ours.
+            // "authorized" means held but not taken; "failed" means nothing moved.
+            capturedPayment: payments.find((p) => p.status === "captured") ?? null,
+        };
+    } catch (error: unknown) {
+        if (isRequestError(error)) throw error;
+        const status = (error as { statusCode?: number })?.statusCode;
+        if (status === 401) {
+            logger.error("Razorpay rejected our API credentials during reconciliation");
+            throw ERRORS.RAZORPAY_AUTH_FAILED;
+        }
+        if (status === 400 || status === 404) throw ERRORS.PAYMENT_ORDER_NOT_AT_GATEWAY;
+        logger.error("Razorpay reconciliation failed:", error);
+        throw ERRORS.RAZORPAY_ORDER_FAILED;
+    }
+}
