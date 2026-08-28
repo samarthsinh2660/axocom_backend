@@ -3,6 +3,10 @@
 -- Host: localhost    Database: axocom
 -- ------------------------------------------------------
 -- Server version	8.4.7
+--
+-- Seed data for local development. Table structures are kept in sync with
+-- 001_axocom_schema.sql (the production schema dump) — see that file for
+-- the authoritative column list of every table.
 
 /*!40101 SET @OLD_CHARACTER_SET_CLIENT=@@CHARACTER_SET_CLIENT */;
 /*!40101 SET @OLD_CHARACTER_SET_RESULTS=@@CHARACTER_SET_RESULTS */;
@@ -26,6 +30,7 @@ CREATE TABLE `candidates` (
   `id` int NOT NULL AUTO_INCREMENT,
   `name` varchar(255) NOT NULL,
   `caste` varchar(255) DEFAULT NULL,
+  `gender` varchar(10) DEFAULT NULL,
   `so_do_wo` varchar(255) DEFAULT NULL,
   `age` int NOT NULL,
   `candidate_image` varchar(255) DEFAULT NULL,
@@ -34,9 +39,9 @@ CREATE TABLE `candidates` (
   `name_enrolled_as_voter_in` varchar(255) NOT NULL,
   `self_profession` varchar(255) DEFAULT NULL,
   `spouse_profession` varchar(255) DEFAULT NULL,
+  `education_history` json DEFAULT NULL,
   `education_category` varchar(255) DEFAULT NULL,
   `university_name` varchar(255) DEFAULT NULL,
-  `education_history` json DEFAULT NULL,
   `source_of_income` json DEFAULT NULL,
   `contracts` json DEFAULT NULL,
   `social_profiles` json DEFAULT NULL,
@@ -51,7 +56,7 @@ CREATE TABLE `candidates` (
 
 LOCK TABLES `candidates` WRITE;
 /*!40000 ALTER TABLE `candidates` DISABLE KEYS */;
-INSERT INTO `candidates` VALUES (1,'Sowmya Reddy','OBC','D/O Ramalinga Reddy',36,NULL,'Bangalore South','INC','Jayanagar','Social Worker','Business','Graduate','Christ University','[{\"degree\": \"M.A. Political Science\", \"status\": \"Completed\", \"institution\": \"Banaras Hindu University\", \"passing_year\": 1994}, {\"degree\": \"B.A. (Hons) Political Science\", \"status\": \"Completed\", \"institution\": \"Banaras Hindu University\", \"passing_year\": 1992}, {\"degree\": \"Senior Secondary (Class XII)\", \"status\": \"Completed\", \"institution\": \"U.P. Board Allahabad\", \"passing_year\": 1989}]','[\"Agriculture Income\", \"Business Income\"]','[]','{\"twitter\": \"https://twitter.com/sowmyareddy\"}','2026-02-21 06:07:24'),(2,'Raghav Sharma','General','S/O Mahesh Sharma',48,NULL,'Bangalore South','BJP','Jayanagar','Businessman','Homemaker','Post Graduate','Bangalore University',NULL,'[\"Business Income\"]','[]','{\"twitter\": \"https://twitter.com/raghavsharma\"}','2026-02-21 06:21:50'),(3,'Anita Rao','OBC','W/O Srinivas Rao',42,NULL,'Bangalore South','JDS','Basavanagudi','Advocate','Engineer','Graduate','National Law School',NULL,'[\"Legal Practice\"]','[]','{\"facebook\": \"https://facebook.com/anitarao\"}','2026-02-21 06:21:50');
+INSERT INTO `candidates` VALUES (1,'Sowmya Reddy','OBC','Female','D/O Ramalinga Reddy',36,NULL,'Bangalore South','INC','Jayanagar','Social Worker','Business','[{\"degree\": \"M.A. Political Science\", \"status\": \"Completed\", \"institution\": \"Banaras Hindu University\", \"passing_year\": 1994}, {\"degree\": \"B.A. (Hons) Political Science\", \"status\": \"Completed\", \"institution\": \"Banaras Hindu University\", \"passing_year\": 1992}, {\"degree\": \"Senior Secondary (Class XII)\", \"status\": \"Completed\", \"institution\": \"U.P. Board Allahabad\", \"passing_year\": 1989}]','Graduate','Christ University','[\"Agriculture Income\", \"Business Income\"]','[]','{\"twitter\": \"https://twitter.com/sowmyareddy\"}','2026-02-21 06:07:24'),(2,'Raghav Sharma','General','Male','S/O Mahesh Sharma',48,NULL,'Bangalore South','BJP','Jayanagar','Businessman','Homemaker',NULL,'Post Graduate','Bangalore University','[\"Business Income\"]','[]','{\"twitter\": \"https://twitter.com/raghavsharma\"}','2026-02-21 06:21:50'),(3,'Anita Rao','OBC','Female','W/O Srinivas Rao',42,NULL,'Bangalore South','JDS','Basavanagudi','Advocate','Engineer',NULL,'Graduate','National Law School','[\"Legal Practice\"]','[]','{\"facebook\": \"https://facebook.com/anitarao\"}','2026-02-21 06:21:50');
 /*!40000 ALTER TABLE `candidates` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -67,7 +72,6 @@ CREATE TABLE `constituency` (
   `name` varchar(255) NOT NULL,
   `state` varchar(255) NOT NULL,
   `ac_number` int NOT NULL,
-  `number_of_polling_stations` int NOT NULL,
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
@@ -79,7 +83,7 @@ CREATE TABLE `constituency` (
 
 LOCK TABLES `constituency` WRITE;
 /*!40000 ALTER TABLE `constituency` DISABLE KEYS */;
-INSERT INTO `constituency` VALUES (1,'Bangalore South','Karnataka',178,245,'2026-02-21 06:07:59');
+INSERT INTO `constituency` VALUES (1,'Bangalore South','Karnataka',178,'2026-02-21 06:07:59');
 /*!40000 ALTER TABLE `constituency` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -101,6 +105,7 @@ CREATE TABLE `election` (
   `total_voters` int NOT NULL,
   `male_voters` int NOT NULL,
   `female_voters` int NOT NULL,
+  `number_of_polling_stations` int NOT NULL,
   `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `constituency_id` (`constituency_id`),
@@ -114,7 +119,7 @@ CREATE TABLE `election` (
 
 LOCK TABLES `election` WRITE;
 /*!40000 ALTER TABLE `election` DISABLE KEYS */;
-INSERT INTO `election` VALUES (1,'Karnataka Assembly Election 2024','2024-04-01 00:00:00','2024-05-01 00:00:00',2024,1,'Assembly',245000,124000,121000,'2026-02-21 06:08:43'),(2,'Karnataka Assembly Election 2019','2019-04-01 00:00:00','2019-05-01 00:00:00',2019,1,'Assembly',230000,116000,114000,'2026-02-21 06:24:36');
+INSERT INTO `election` VALUES (1,'Karnataka Assembly Election 2024','2024-04-01 00:00:00','2024-05-01 00:00:00',2024,1,'Assembly',245000,124000,121000,245,'2026-02-21 06:08:43'),(2,'Karnataka Assembly Election 2019','2019-04-01 00:00:00','2019-05-01 00:00:00',2019,1,'Assembly',230000,116000,114000,245,'2026-02-21 06:24:36');
 /*!40000 ALTER TABLE `election` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -195,6 +200,22 @@ INSERT INTO `election_result` VALUES (1,1,85000,1,'Won','2026-02-21 06:16:36'),(
 UNLOCK TABLES;
 
 --
+-- Table structure for table `flag_data`
+--
+
+DROP TABLE IF EXISTS `flag_data`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `flag_data` (
+  `id` int NOT NULL AUTO_INCREMENT,
+  `data` json NOT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `email` varchar(255) NOT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
 -- Table structure for table `party`
 --
 
@@ -245,12 +266,13 @@ CREATE TABLE `users` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
+-- Dumping data for table `users`
+--
 
 LOCK TABLES `users` WRITE;
 /*!40000 ALTER TABLE `users` DISABLE KEYS */;
 INSERT INTO `users` VALUES (1,'user@example.com','$2a$12$NKmNtEFkcu.CyhGsD1EBXO69CtGQnNjfHPZDXEHwTX4BcHebTxUC2','Test',0,'Bangalore South','2026-01-31 07:03:52','2026-01-31 07:03:52');
 INSERT INTO `users` VALUES (2,'user@example2.com','$2a$12$NKmNtEFkcu.CyhGsD1EBXO69CtGQnNjfHPZDXEHwTX4BcHebTxUC2','Test',1,'Bangalore South','2026-01-31 07:03:52','2026-01-31 07:03:52');
-
 /*!40000 ALTER TABLE `users` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -350,7 +372,7 @@ CREATE TABLE `voter_details` (
   `state` varchar(255) NOT NULL,
   `parliamentary_constituency` varchar(255) NOT NULL,
   `assembly_constituency` varchar(255) NOT NULL,
-  `polling_station` varchar(255) NOT NULL,
+  `polling_station` varchar(500) NOT NULL,
   `part_number_name` varchar(255) NOT NULL,
   `part_serial_number` int NOT NULL,
   `fetch_status` varchar(50) NOT NULL,

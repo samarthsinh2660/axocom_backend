@@ -12,7 +12,8 @@ services:
       - "3307:3306"
     volumes:
       - axocom_db_data:/var/lib/mysql
-      - ./src/dummydata/03-dump.sql:/docker-entrypoint-initdb.d/03-dump.sql:ro
+      - ./src/dataconfig/001_axocom_schema.sql:/docker-entrypoint-initdb.d/001_axocom_schema.sql:ro
+      - ./src/dataconfig/002_dump.sql:/docker-entrypoint-initdb.d/002_dump.sql:ro
     tmpfs:
       - /var/run/mysqld
     healthcheck:
