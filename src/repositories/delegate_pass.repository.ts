@@ -167,6 +167,61 @@ class DelegatePassRepository {
         }
     }
 
+    /**
+     * Records the Razorpay order opened for this registration. Re-running
+     * checkout after a dismissed modal simply overwrites the previous order.
+     */
+    async attachRazorpayOrder(id: string, orderId: string): Promise<Result<true, RequestError>> {
+        try {
+            const [result] = await db.execute<ResultSetHeader>(
+                `UPDATE ${DELEGATE_PASS_REGISTRATIONS_TABLE}
+                 SET razorpay_order_id = ?
+                 WHERE id = ? AND payment_status <> 'paid'`,
+                [orderId, id]
+            );
+            if (result.affectedRows === 0) return err(ERRORS.PAYMENT_ALREADY_COMPLETED);
+            return ok(true);
+        } catch (error) {
+            logger.error("Error attaching razorpay order to delegate pass:", error);
+            return err(ERRORS.DATABASE_ERROR);
+        }
+    }
+
+    /**
+     * Marks paid only when the order id matches the one this registration
+     * opened, so a valid payment for a different (cheaper) registration cannot
+     * be replayed against this one. Signature validity is checked before this
+     * is ever called.
+     */
+    async markPaid(
+        id: string,
+        payment: { orderId: string; paymentId: string; signature: string }
+    ): Promise<Result<true, RequestError>> {
+        const existing = await this.getById(id);
+        if (existing.isErr()) return err(existing.error);
+        if (existing.value.payment_status === "paid") return err(ERRORS.PAYMENT_ALREADY_COMPLETED);
+        if (existing.value.razorpay_order_id !== payment.orderId) {
+            return err(ERRORS.PAYMENT_ORDER_MISMATCH);
+        }
+
+        try {
+            const [result] = await db.execute<ResultSetHeader>(
+                `UPDATE ${DELEGATE_PASS_REGISTRATIONS_TABLE}
+                 SET payment_status = 'paid',
+                     razorpay_payment_id = ?,
+                     razorpay_signature = ?,
+                     paid_at = NOW()
+                 WHERE id = ? AND razorpay_order_id = ? AND payment_status <> 'paid'`,
+                [payment.paymentId, payment.signature, id, payment.orderId]
+            );
+            if (result.affectedRows === 0) return err(ERRORS.PAYMENT_ALREADY_COMPLETED);
+            return ok(true);
+        } catch (error) {
+            logger.error("Error marking delegate pass paid:", error);
+            return err(ERRORS.DATABASE_ERROR);
+        }
+    }
+
     async countByPaymentStatus(
         paymentStatus: PaymentStatus
     ): Promise<Result<{ count: number; amount: number }, RequestError>> {

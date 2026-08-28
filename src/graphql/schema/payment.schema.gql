@@ -1,0 +1,56 @@
+"""
+Which registration a payment belongs to. The amount is always read from that
+stored row, never sent by the client.
+"""
+enum PaymentRegistrationType {
+  delegate_pass
+  nomination
+}
+
+"""
+Everything the browser needs to open Razorpay Checkout. `keyId` is the public
+Razorpay key; it is served from here rather than baked into the frontend build
+so the client can never drift out of sync with the server's key pair.
+"""
+type PaymentOrder {
+  orderId: String!
+  amount: Int!
+  currency: String!
+  keyId: String!
+  registrationId: ID!
+  registrationType: PaymentRegistrationType!
+  prefillName: String!
+  prefillEmail: String!
+  prefillContact: String!
+}
+
+type PaymentVerificationResult {
+  verified: Boolean!
+  registrationId: ID!
+  paymentStatus: PaymentStatus!
+}
+
+input VerifyPaymentInput {
+  registrationType: PaymentRegistrationType!
+  registrationId: ID!
+  razorpayOrderId: String!
+  razorpayPaymentId: String!
+  razorpaySignature: String!
+}
+
+extend type Mutation {
+  """
+  Opens a Razorpay order for an existing, unpaid registration. The amount comes
+  from the stored registration, so the caller cannot choose what to pay.
+  """
+  createPaymentOrder(
+    registrationType: PaymentRegistrationType!
+    registrationId: ID!
+  ): PaymentOrder!
+
+  """
+  Verifies the Checkout signature and marks the registration paid. Returns an
+  error and leaves the registration untouched if the signature does not match.
+  """
+  verifyPayment(input: VerifyPaymentInput!): PaymentVerificationResult!
+}

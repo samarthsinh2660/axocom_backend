@@ -113,6 +113,15 @@ export const ERRORS = {
     INVALID_QUANTITY: new RequestError("Number of passes must be between 1 and 10", 70005, 400),
     INVALID_PAYMENT_STATUS: new RequestError("Invalid payment status", 70006, 400),
 
+    // Payment gateway errors (9xxxx)
+    RAZORPAY_NOT_CONFIGURED: new RequestError("Payments are not configured", 90001, 500),
+    RAZORPAY_ORDER_FAILED: new RequestError("Could not start the payment", 90002, 500),
+    RAZORPAY_AUTH_FAILED: new RequestError("Payment gateway authentication failed", 90003, 500),
+    INVALID_ORDER_AMOUNT: new RequestError("Order amount must be at least 100 paise", 90004, 400),
+    PAYMENT_SIGNATURE_INVALID: new RequestError("Payment could not be verified", 90005, 400),
+    PAYMENT_ALREADY_COMPLETED: new RequestError("This registration is already paid", 90006, 409),
+    PAYMENT_ORDER_MISMATCH: new RequestError("Payment does not match this registration", 90007, 400),
+
     // Refund request errors (8xxxx)
     REFUND_REQUEST_NOT_FOUND: new RequestError("Refund request not found", 80001, 404),
     INVALID_REFUND_STATUS: new RequestError("Invalid refund status", 80002, 400),
