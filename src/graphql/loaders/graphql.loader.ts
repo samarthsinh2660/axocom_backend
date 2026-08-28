@@ -13,6 +13,8 @@ import { electionResultResolvers } from "../resolvers/election_result.resolver";
 import { flagResolvers } from "../resolvers/flag.resolver";
 import { mentorResolvers } from "../resolvers/mentor.resolver";
 import { solutionResolvers } from "../resolvers/solution.resolver";
+import { summitResolvers } from "../resolvers/summit.resolver";
+import { refundRequestResolvers } from "../resolvers/refund_request.resolver";
 
 const schemaPath = join(process.cwd(), "src/graphql/schema");
 
@@ -36,6 +38,8 @@ export function buildGraphQL() {
         flagResolvers,
         mentorResolvers,
         solutionResolvers,
+        summitResolvers,
+        refundRequestResolvers,
     ]);
 
     return { typeDefs, resolvers };

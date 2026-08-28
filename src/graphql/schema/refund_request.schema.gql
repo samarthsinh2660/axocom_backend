@@ -1,0 +1,105 @@
+enum RefundStatus {
+  open
+  in_review
+  approved
+  rejected
+  refunded
+}
+
+enum RefundRegistrationType {
+  delegate_pass
+  nomination
+}
+
+enum RefundMessageAuthor {
+  user
+  admin
+}
+
+type RefundRequestMessage {
+  id: ID!
+  author: RefundMessageAuthor!
+  message: String!
+  createdAt: DateTime!
+}
+
+"""
+Ticket view returned by the public lookup. Carries the thread but none of the
+internal reviewer fields.
+"""
+type RefundTicket {
+  id: ID!
+  fullName: String!
+  registrationType: RefundRegistrationType!
+  registrationId: String
+  paymentReference: String
+  status: RefundStatus!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  resolvedAt: DateTime
+  messages: [RefundRequestMessage!]!
+}
+
+type RefundRequest {
+  id: ID!
+  fullName: String!
+  email: String!
+  phone: String!
+  registrationType: RefundRegistrationType!
+  registrationId: String
+  paymentReference: String
+  reason: String!
+  status: RefundStatus!
+  resolvedAt: DateTime
+  reviewedByAdminId: Int
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  messages: [RefundRequestMessage!]!
+}
+
+type RefundRequestConnection {
+  data: [RefundRequest!]!
+  pagination: Pagination!
+}
+
+type RefundRequestResult {
+  ticketId: ID!
+  status: RefundStatus!
+}
+
+input CreateRefundRequestInput {
+  fullName: String!
+  email: String!
+  phone: String!
+  registrationType: RefundRegistrationType!
+  registrationId: String
+  paymentReference: String
+  reason: String!
+}
+
+extend type Query {
+  """
+  Public ticket lookup. Requires both the ticket id and the email it was filed
+  with, so a ticket id on its own cannot expose someone else's request.
+  """
+  refundTicket(ticketId: ID!, email: String!): RefundTicket
+  adminRefundRequests(
+    status: RefundStatus
+    registrationType: RefundRegistrationType
+    search: String
+    page: Int = 1
+    limit: Int = 20
+  ): RefundRequestConnection!
+  adminRefundRequest(id: ID!): RefundRequest
+}
+
+extend type Mutation {
+  createRefundRequest(input: CreateRefundRequestInput!): RefundRequestResult!
+  """
+  Adds a message to the ticket thread from the requester. Guarded by the same
+  ticket id + email pair as the lookup.
+  """
+  replyToRefundTicket(ticketId: ID!, email: String!, message: String!): RefundRequestMessage!
+  replyToRefundRequest(id: ID!, message: String!): RefundRequestMessage!
+  updateRefundRequestStatus(id: ID!, status: RefundStatus!): Boolean!
+}

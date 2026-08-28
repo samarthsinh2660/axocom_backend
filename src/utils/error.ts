@@ -105,7 +105,20 @@ export const ERRORS = {
     MENTOR_NOT_FOUND: new RequestError("Mentor application not found", 60004, 404),
     INVALID_REVIEW_STATUS: new RequestError("Invalid review status", 60005, 400),
 
+    // Summit registration errors (7xxxx)
+    DELEGATE_PASS_NOT_FOUND: new RequestError("Delegate pass registration not found", 70001, 404),
+    NOMINATION_NOT_FOUND: new RequestError("Nomination registration not found", 70002, 404),
+    INVALID_PASS_SELECTION: new RequestError("Invalid delegate pass selection", 70003, 400),
+    INVALID_NOMINATION_PLAN: new RequestError("Invalid nomination plan selection", 70004, 400),
+    INVALID_QUANTITY: new RequestError("Number of passes must be between 1 and 10", 70005, 400),
+    INVALID_PAYMENT_STATUS: new RequestError("Invalid payment status", 70006, 400),
 
+    // Refund request errors (8xxxx)
+    REFUND_REQUEST_NOT_FOUND: new RequestError("Refund request not found", 80001, 404),
+    INVALID_REFUND_STATUS: new RequestError("Invalid refund status", 80002, 400),
+    INVALID_REGISTRATION_TYPE: new RequestError("Invalid registration type", 80003, 400),
+    REFUND_REASON_REQUIRED: new RequestError("A reason for the refund request is required", 80004, 400),
+    REFUND_MESSAGE_REQUIRED: new RequestError("Message cannot be empty", 80005, 400),
 };
 
 export function isDuplicateKeyError(error: unknown): boolean {

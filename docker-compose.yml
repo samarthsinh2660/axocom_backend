@@ -14,6 +14,7 @@ services:
       - axocom_db_data:/var/lib/mysql
       - ./src/dataconfig/001_axocom_schema.sql:/docker-entrypoint-initdb.d/001_axocom_schema.sql:ro
       - ./src/dataconfig/002_dump.sql:/docker-entrypoint-initdb.d/002_dump.sql:ro
+      - ./src/dataconfig/003_summit_registrations.sql:/docker-entrypoint-initdb.d/003_summit_registrations.sql:ro
     tmpfs:
       - /var/run/mysqld
     healthcheck:
