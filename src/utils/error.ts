@@ -137,6 +137,7 @@ export const ERRORS = {
     REFUND_REASON_REQUIRED: new RequestError("A reason for the refund request is required", 80004, 400),
     REFUND_MESSAGE_REQUIRED: new RequestError("Message cannot be empty", 80005, 400),
     REFUND_REGISTRATION_REQUIRED: new RequestError("A registration reference is required", 80006, 400),
+    INVALID_SUPPORT_REQUEST_TYPE: new RequestError("Invalid request type", 80008, 400),
     REFUND_REGISTRATION_MISMATCH: new RequestError(
         "We could not find a registration with that reference and email address. "
             + "Please use the email address the registration was made with.",

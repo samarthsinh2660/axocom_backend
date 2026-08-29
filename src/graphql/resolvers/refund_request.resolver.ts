@@ -15,6 +15,7 @@ function mapMessage(row: Record<string, unknown>) {
 function mapRefundRequest(row: Record<string, unknown>) {
     return {
         id: row.id,
+        requestType: row.request_type,
         fullName: row.full_name,
         email: row.email,
         phone: row.phone,
@@ -34,6 +35,7 @@ function mapRefundRequest(row: Record<string, unknown>) {
 function mapRefundTicket(row: Record<string, unknown>) {
     return {
         id: row.id,
+        requestType: row.request_type,
         fullName: row.full_name,
         registrationType: row.registration_type,
         registrationId: row.registration_id,
@@ -72,6 +74,7 @@ export const refundRequestResolvers = {
             _: unknown,
             args: {
                 status?: RefundStatus;
+                requestType?: string;
                 registrationType?: RefundRegistrationType;
                 search?: string;
                 page?: number;

@@ -11,16 +11,18 @@ CREATE TABLE IF NOT EXISTS refund_requests (
     normalized_email VARCHAR(255) NOT NULL,
     phone VARCHAR(50) NOT NULL,
     normalized_phone VARCHAR(20) NOT NULL,
+    request_type ENUM('refund', 'payment_not_reflected', 'other') NOT NULL DEFAULT 'refund',
     registration_type ENUM('delegate_pass', 'nomination') NOT NULL,
     registration_id VARCHAR(255),
     payment_reference VARCHAR(255),
     reason TEXT NOT NULL,
-    status ENUM('open', 'in_review', 'approved', 'rejected', 'refunded') NOT NULL DEFAULT 'open',
+    status ENUM('open', 'in_review', 'approved', 'rejected', 'refunded', 'resolved') NOT NULL DEFAULT 'open',
     resolved_at TIMESTAMP NULL,
     reviewed_by_admin_id INT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_refund_status (status),
+    INDEX idx_refund_request_type (request_type),
     INDEX idx_refund_created_at (created_at),
     INDEX idx_refund_normalized_email (normalized_email),
     INDEX idx_refund_registration (registration_type, registration_id),
@@ -42,7 +44,26 @@ CREATE TABLE IF NOT EXISTS refund_request_messages (
 ) ENGINE=InnoDB
 `;
 
-export type RefundStatus = "open" | "in_review" | "approved" | "rejected" | "refunded";
+export type RefundStatus =
+    | "open"
+    | "in_review"
+    | "approved"
+    | "rejected"
+    | "refunded"
+    | "resolved";
+
+/**
+ * What the person is actually asking for. The thread, the registration link and
+ * the gateway check are the same for all of them; only the closing status
+ * differs - a payment query is "resolved", not "refunded".
+ */
+export type SupportRequestType = "refund" | "payment_not_reflected" | "other";
+
+export const SUPPORT_REQUEST_TYPES: SupportRequestType[] = [
+    "refund",
+    "payment_not_reflected",
+    "other",
+];
 export type RefundRegistrationType = "delegate_pass" | "nomination";
 export type RefundMessageAuthor = "user" | "admin";
 
@@ -52,10 +73,12 @@ export const REFUND_STATUSES: RefundStatus[] = [
     "approved",
     "rejected",
     "refunded",
+    "resolved",
 ];
 
 export interface RefundRequestRow extends RowDataPacket {
     id: string;
+    request_type: SupportRequestType;
     full_name: string;
     email: string;
     normalized_email: string;
@@ -85,6 +108,7 @@ export type CreateRefundRequestInput = {
     fullName: string;
     email: string;
     phone: string;
+    requestType?: SupportRequestType | null;
     registrationType: RefundRegistrationType;
     /**
      * Required by the repository, but typed optional because the GraphQL input

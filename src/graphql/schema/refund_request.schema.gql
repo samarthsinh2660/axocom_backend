@@ -4,6 +4,18 @@ enum RefundStatus {
   approved
   rejected
   refunded
+  """Closes a request that was never about money moving back."""
+  resolved
+}
+
+"""
+What the person is asking for. The thread, registration link and gateway check
+are identical for all of them; only the closing status differs.
+"""
+enum SupportRequestType {
+  refund
+  payment_not_reflected
+  other
 }
 
 enum RefundRegistrationType {
@@ -29,6 +41,7 @@ internal reviewer fields.
 """
 type RefundTicket {
   id: ID!
+  requestType: SupportRequestType!
   fullName: String!
   registrationType: RefundRegistrationType!
   registrationId: String
@@ -42,6 +55,7 @@ type RefundTicket {
 
 type RefundRequest {
   id: ID!
+  requestType: SupportRequestType!
   fullName: String!
   email: String!
   phone: String!
@@ -68,6 +82,8 @@ type RefundRequestResult {
 }
 
 input CreateRefundRequestInput {
+  """Defaults to refund when omitted, so older clients keep working."""
+  requestType: SupportRequestType
   fullName: String!
   email: String!
   phone: String!
@@ -96,6 +112,7 @@ extend type Query {
   refundTicket(ticketId: ID!, email: String!): RefundTicket
   adminRefundRequests(
     status: RefundStatus
+    requestType: SupportRequestType
     registrationType: RefundRegistrationType
     search: String
     page: Int = 1

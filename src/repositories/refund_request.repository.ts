@@ -11,6 +11,8 @@ import {
     type RefundRequestMessageRow,
     type RefundRequestRow,
     type RefundStatus,
+    type SupportRequestType,
+    SUPPORT_REQUEST_TYPES,
 } from "../models/refund_request.model";
 import { DELEGATE_PASS_REGISTRATIONS_TABLE } from "../models/delegate_pass.model";
 import { NOMINATION_REGISTRATIONS_TABLE } from "../models/nomination.model";
@@ -51,6 +53,11 @@ class RefundRequestRepository {
         }
         // Without a reference there is nothing tying the ticket to a
         // registration, so an admin has no reliable way to find what to refund.
+        const requestType: SupportRequestType = input.requestType ?? "refund";
+        if (!SUPPORT_REQUEST_TYPES.includes(requestType)) {
+            return err(ERRORS.INVALID_SUPPORT_REQUEST_TYPE);
+        }
+
         const registrationId = input.registrationId?.trim();
         if (!registrationId) return err(ERRORS.REFUND_REGISTRATION_REQUIRED);
 
@@ -84,11 +91,12 @@ class RefundRequestRepository {
             await connection.beginTransaction();
             await connection.execute(
                 `INSERT INTO ${REFUND_REQUESTS_TABLE}
-                (id, full_name, email, normalized_email, phone, normalized_phone,
+                (id, request_type, full_name, email, normalized_email, phone, normalized_phone,
                  registration_type, registration_id, payment_reference, reason, status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open')`,
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open')`,
                 [
                     ticketId,
+                    requestType,
                     input.fullName.trim(),
                     input.email.trim(),
                     normalizedEmail,
@@ -171,6 +179,7 @@ class RefundRequestRepository {
 
     async listAdmin(options: {
         status?: string | null;
+        requestType?: string | null;
         registrationType?: string | null;
         search?: string | null;
         page?: number;
@@ -183,6 +192,10 @@ class RefundRequestRepository {
         if (options.status) {
             where += " AND status = ?";
             params.push(options.status);
+        }
+        if (options.requestType) {
+            where += " AND request_type = ?";
+            params.push(options.requestType);
         }
         if (options.registrationType) {
             where += " AND registration_type = ?";
@@ -218,7 +231,7 @@ class RefundRequestRepository {
     ): Promise<Result<true, RequestError>> {
         if (!REFUND_STATUSES.includes(status)) return err(ERRORS.INVALID_REFUND_STATUS);
 
-        const isResolved = status === "approved" || status === "rejected" || status === "refunded";
+        const isResolved = ["approved", "rejected", "refunded", "resolved"].includes(status);
 
         try {
             const [result] = await db.execute<ResultSetHeader>(
