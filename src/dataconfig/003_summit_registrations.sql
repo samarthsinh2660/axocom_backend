@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS delegate_pass_registrations (
     total_amount BIGINT NOT NULL,
     currency VARCHAR(3) NOT NULL DEFAULT 'INR',
     gst_number VARCHAR(50),
+    startup_details TEXT,
     contact_consent_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     payment_status ENUM('pending', 'paid', 'failed', 'refunded') NOT NULL DEFAULT 'pending',
     razorpay_order_id VARCHAR(255),

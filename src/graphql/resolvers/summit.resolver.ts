@@ -24,6 +24,7 @@ function mapDelegatePass(row: Record<string, unknown>) {
         totalAmount: row.total_amount,
         currency: row.currency,
         gstNumber: row.gst_number,
+        startupDetails: row.startup_details,
         contactConsentAt: row.contact_consent_at,
         paymentStatus: row.payment_status,
         razorpayOrderId: row.razorpay_order_id,

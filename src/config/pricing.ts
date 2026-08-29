@@ -11,6 +11,8 @@ export type DelegatePass = {
     name: string;
     audience: string;
     unitAmount: number;
+    /** Buyer must describe their startup; the pass is issued subject to review. */
+    requiresStartupDetails?: boolean;
 };
 
 export type NominationPlan = {
@@ -19,7 +21,7 @@ export type NominationPlan = {
 };
 
 export const DELEGATE_PASSES: DelegatePass[] = [
-    { name: "Startup Pass", audience: "Startups", unitAmount: 149900 },
+    { name: "Startup Pass", audience: "Startups", unitAmount: 149900, requiresStartupDetails: true },
     { name: "Professional Pass", audience: "Professionals", unitAmount: 299900 },
     { name: "Delegate Pass", audience: "Delegates", unitAmount: 750000 },
     { name: "Executive Pass", audience: "Executives", unitAmount: 1499900 },

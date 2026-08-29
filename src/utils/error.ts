@@ -112,6 +112,11 @@ export const ERRORS = {
     INVALID_NOMINATION_PLAN: new RequestError("Invalid nomination plan selection", 70004, 400),
     INVALID_QUANTITY: new RequestError("Number of passes must be between 1 and 10", 70005, 400),
     INVALID_PAYMENT_STATUS: new RequestError("Invalid payment status", 70006, 400),
+    STARTUP_DETAILS_REQUIRED: new RequestError(
+        "Please describe your startup in at least 20 characters to claim this pass",
+        70007,
+        400
+    ),
 
     // Payment gateway errors (9xxxx)
     RAZORPAY_NOT_CONFIGURED: new RequestError("Payments are not configured", 90001, 500),

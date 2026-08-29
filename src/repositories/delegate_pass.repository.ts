@@ -18,6 +18,7 @@ import { findDelegatePass } from "../config/pricing";
 const logger = createLogger("@delegate_pass.repository");
 
 const MAX_QUANTITY = 10;
+const MIN_STARTUP_DETAILS = 20;
 const PAYMENT_STATUSES: PaymentStatus[] = ["pending", "paid", "failed", "refunded"];
 
 /** Only a registration with no money recorded against it can be settled. */
@@ -57,6 +58,12 @@ class DelegatePassRepository {
         const pass = findDelegatePass(input.passName);
         if (!pass) return err(ERRORS.INVALID_PASS_SELECTION);
 
+        // Whether details are needed is a property of the pass, not a name check.
+        const startupDetails = input.startupDetails?.trim() || null;
+        if (pass.requiresStartupDetails && (startupDetails?.length ?? 0) < MIN_STARTUP_DETAILS) {
+            return err(ERRORS.STARTUP_DETAILS_REQUIRED);
+        }
+
         const normalizedEmail = normalizeEmail(input.email);
         const normalizedPhone = normalizePhone(input.phone);
         if (!isValidNormalizedPhone(normalizedPhone)) {
@@ -72,8 +79,9 @@ class DelegatePassRepository {
                 `INSERT INTO ${DELEGATE_PASS_REGISTRATIONS_TABLE}
                 (id, full_name, designation, organisation, email, normalized_email, phone, normalized_phone,
                  pass_name, audience, quantity, unit_amount, unit_gst_amount, subtotal_amount,
-                 gst_rate_bps, gst_amount, total_amount, gst_number, contact_consent_at, payment_status)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'pending')`,
+                 gst_rate_bps, gst_amount, total_amount, gst_number, startup_details,
+                 contact_consent_at, payment_status)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), 'pending')`,
                 [
                     registrationId,
                     input.fullName.trim(),
@@ -93,6 +101,7 @@ class DelegatePassRepository {
                     gst.gstAmount,
                     gst.totalAmount,
                     input.gstNumber?.trim() || null,
+                    startupDetails,
                 ]
             );
             return ok({

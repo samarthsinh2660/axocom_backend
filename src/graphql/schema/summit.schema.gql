@@ -27,6 +27,7 @@ type DelegatePassRegistration {
   totalAmount: Int!
   currency: String!
   gstNumber: String
+  startupDetails: String
   contactConsentAt: DateTime!
   paymentStatus: PaymentStatus!
   razorpayOrderId: String
@@ -112,6 +113,8 @@ input RegisterDelegatePassInput {
   passName: String!
   quantity: Int!
   gstNumber: String
+  """Required for passes that ask for it, such as the Startup Pass."""
+  startupDetails: String
   """
   Ignored. The price and audience now come from the server's price list.
   Kept optional so a frontend deployed before this change keeps working -

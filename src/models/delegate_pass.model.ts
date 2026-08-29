@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS delegate_pass_registrations (
     total_amount BIGINT NOT NULL,
     currency VARCHAR(3) NOT NULL DEFAULT 'INR',
     gst_number VARCHAR(50),
+    startup_details TEXT,
     contact_consent_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     payment_status ENUM('pending', 'paid', 'failed', 'refunded') NOT NULL DEFAULT 'pending',
     razorpay_order_id VARCHAR(255),
@@ -71,6 +72,8 @@ export interface DelegatePassRegistrationRow extends RowDataPacket {
     total_amount: number;
     currency: string;
     gst_number: string | null;
+    /** Required for passes that declare it in config/pricing. */
+    startup_details: string | null;
     contact_consent_at: Date;
     payment_status: PaymentStatus;
     razorpay_order_id: string | null;
@@ -94,5 +97,6 @@ export type CreateDelegatePassInput = {
     passName: string;
     quantity: number;
     gstNumber?: string | null;
+    startupDetails?: string | null;
     contactConsent: boolean;
 };

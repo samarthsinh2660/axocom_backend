@@ -133,6 +133,46 @@ describe("DelegatePassRepository", () => {
         expect(mockExecute).not.toHaveBeenCalled();
     });
 
+    it("requires startup details for the pass that asks for them", async () => {
+        for (const startupDetails of [undefined, "", "   ", "too short"]) {
+            const result = await delegatePassRepository.create({
+                ...validInput,
+                passName: "Startup Pass",
+                startupDetails,
+            });
+            expect(result.isErr()).toBe(true);
+            if (result.isErr()) expect(result.error).toBe(ERRORS.STARTUP_DETAILS_REQUIRED);
+        }
+        expect(mockExecute).not.toHaveBeenCalled();
+    });
+
+    it("stores startup details when they are supplied", async () => {
+        mockExecute.mockResolvedValue([{ affectedRows: 1 }, []]);
+
+        const result = await delegatePassRepository.create({
+            ...validInput,
+            passName: "Startup Pass",
+            startupDetails: "  We build offline-first clinic software for rural Uttarakhand.  ",
+        });
+
+        expect(result.isOk()).toBe(true);
+        expect(mockExecute.mock.calls[0][1]).toContain(
+            "We build offline-first clinic software for rural Uttarakhand."
+        );
+    });
+
+    it("does not require startup details for other passes", async () => {
+        mockExecute.mockResolvedValue([{ affectedRows: 1 }, []]);
+
+        const result = await delegatePassRepository.create({
+            ...validInput,
+            passName: "VIP Pass",
+        });
+
+        expect(result.isOk()).toBe(true);
+        expect(mockExecute.mock.calls[0][1]).toContain(null);
+    });
+
     it("rejects a blank pass name as a missing field", async () => {
         for (const passName of ["", "   "]) {
             const result = await delegatePassRepository.create({ ...validInput, passName });
