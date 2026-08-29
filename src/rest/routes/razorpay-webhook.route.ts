@@ -4,6 +4,11 @@ import { RAZORPAY_WEBHOOK_SECRET } from "../../config/env";
 import { delegatePassRepository } from "../../repositories/delegate_pass.repository";
 import { nominationRepository } from "../../repositories/nomination.repository";
 import createLogger from "../../utils/logger";
+import {
+    REGISTRATION_TYPE,
+    isRegistrationType,
+    type RegistrationType,
+} from "../../models/registration_type.model";
 
 const logger = createLogger("@razorpay.webhook");
 
@@ -44,8 +49,10 @@ function isSignatureValid(rawBody: Buffer, signature: string | undefined): boole
     return timingSafeEqual(expectedBuffer, receivedBuffer);
 }
 
-const repositoryFor = (registrationType: string) =>
-    registrationType === "nomination" ? nominationRepository : delegatePassRepository;
+const repositoryFor = (registrationType: RegistrationType) =>
+    registrationType === REGISTRATION_TYPE.NOMINATION
+        ? nominationRepository
+        : delegatePassRepository;
 
 razorpayWebhookRoutes.post(
     "/razorpay",
@@ -82,7 +89,10 @@ razorpayWebhookRoutes.post(
         const paymentId = entity?.id;
         const orderId = entity?.order_id;
         const registrationId = entity?.notes?.registrationId;
-        const registrationType = entity?.notes?.registrationType ?? "delegate_pass";
+        const notedType = entity?.notes?.registrationType;
+        const registrationType: RegistrationType = isRegistrationType(notedType)
+            ? notedType
+            : REGISTRATION_TYPE.DELEGATE_PASS;
 
         if (!paymentId || !orderId || !registrationId) {
             logger.error(`Webhook ${payload.event} missing ids or registration notes`);

@@ -31,7 +31,7 @@ jest.mock("../../utils/razorpay", () => ({
     createRazorpayOrder: jest.fn(),
     verifyPaymentSignature: jest.fn(),
     reconcileByReceipt: jest.fn(),
-    getRazorpayKeyId: () => "rzp_test_example",
+    getRazorpayKeyId: () => ok("rzp_test_example"),
 }));
 
 const mockDelegate = delegatePassRepository as jest.Mocked<typeof delegatePassRepository>;
@@ -108,7 +108,7 @@ describe("PaymentResolvers.createPaymentOrder", () => {
      */
     it("takes the amount from the stored registration, not the request", async () => {
         mockDelegate.getById.mockResolvedValue(ok(delegateRow as never));
-        mockCreateOrder.mockResolvedValue({ orderId: "order_ABC123", amount: 599800, currency: "INR" });
+        mockCreateOrder.mockResolvedValue(ok({ orderId: "order_ABC123", amount: 599800, currency: "INR" }));
         mockDelegate.attachRazorpayOrder.mockResolvedValue(ok(true));
 
         const result = await paymentResolvers.Mutation.createPaymentOrder(null, {
@@ -133,7 +133,7 @@ describe("PaymentResolvers.createPaymentOrder", () => {
 
     it("returns prefill details and the public key id only", async () => {
         mockDelegate.getById.mockResolvedValue(ok(delegateRow as never));
-        mockCreateOrder.mockResolvedValue({ orderId: "order_ABC123", amount: 599800, currency: "INR" });
+        mockCreateOrder.mockResolvedValue(ok({ orderId: "order_ABC123", amount: 599800, currency: "INR" }));
         mockDelegate.attachRazorpayOrder.mockResolvedValue(ok(true));
 
         const result = await paymentResolvers.Mutation.createPaymentOrder(null, {
@@ -149,7 +149,7 @@ describe("PaymentResolvers.createPaymentOrder", () => {
 
     it("stores the opened order against the registration", async () => {
         mockDelegate.getById.mockResolvedValue(ok(delegateRow as never));
-        mockCreateOrder.mockResolvedValue({ orderId: "order_ABC123", amount: 599800, currency: "INR" });
+        mockCreateOrder.mockResolvedValue(ok({ orderId: "order_ABC123", amount: 599800, currency: "INR" }));
         mockDelegate.attachRazorpayOrder.mockResolvedValue(ok(true));
 
         await paymentResolvers.Mutation.createPaymentOrder(null, {
@@ -186,7 +186,7 @@ describe("PaymentResolvers.createPaymentOrder", () => {
 
     it("surfaces a gateway auth failure without leaking gateway internals", async () => {
         mockDelegate.getById.mockResolvedValue(ok(delegateRow as never));
-        mockCreateOrder.mockRejectedValue(ERRORS.RAZORPAY_AUTH_FAILED);
+        mockCreateOrder.mockResolvedValue(err(ERRORS.RAZORPAY_AUTH_FAILED));
 
         await expect(
             paymentResolvers.Mutation.createPaymentOrder(null, {
@@ -207,7 +207,7 @@ describe("PaymentResolvers.createPaymentOrder", () => {
             payment_status: "pending",
             razorpay_order_id: null,
         } as never));
-        mockCreateOrder.mockResolvedValue({ orderId: "order_NOM", amount: 1999900, currency: "INR" });
+        mockCreateOrder.mockResolvedValue(ok({ orderId: "order_NOM", amount: 1999900, currency: "INR" }));
         mockNomination.attachRazorpayOrder.mockResolvedValue(ok(true));
 
         const result = await paymentResolvers.Mutation.createPaymentOrder(null, {
@@ -227,7 +227,7 @@ describe("PaymentResolvers.verifyPayment", () => {
     });
 
     it("marks the registration paid when the signature checks out", async () => {
-        mockVerifySignature.mockReturnValue(true);
+        mockVerifySignature.mockReturnValue(ok(true));
         mockDelegate.markPaid.mockResolvedValue(ok(true));
 
         const result = await paymentResolvers.Mutation.verifyPayment(null, { input: validPayment });
@@ -252,7 +252,7 @@ describe("PaymentResolvers.verifyPayment", () => {
      * must never reach markPaid.
      */
     it("rejects an invalid signature and leaves the registration untouched", async () => {
-        mockVerifySignature.mockReturnValue(false);
+        mockVerifySignature.mockReturnValue(ok(false));
 
         await expect(
             paymentResolvers.Mutation.verifyPayment(null, { input: validPayment })
@@ -280,7 +280,7 @@ describe("PaymentResolvers.verifyPayment", () => {
     });
 
     it("surfaces an order that belongs to a different registration", async () => {
-        mockVerifySignature.mockReturnValue(true);
+        mockVerifySignature.mockReturnValue(ok(true));
         mockDelegate.markPaid.mockResolvedValue(err(ERRORS.PAYMENT_ORDER_MISMATCH));
 
         await expect(
@@ -289,7 +289,7 @@ describe("PaymentResolvers.verifyPayment", () => {
     });
 
     it("surfaces a replayed verification of an already paid registration", async () => {
-        mockVerifySignature.mockReturnValue(true);
+        mockVerifySignature.mockReturnValue(ok(true));
         mockDelegate.markPaid.mockResolvedValue(err(ERRORS.PAYMENT_ALREADY_COMPLETED));
 
         await expect(
@@ -298,7 +298,7 @@ describe("PaymentResolvers.verifyPayment", () => {
     });
 
     it("routes a nomination verification to the nomination repository", async () => {
-        mockVerifySignature.mockReturnValue(true);
+        mockVerifySignature.mockReturnValue(ok(true));
         mockNomination.markPaid.mockResolvedValue(ok(true));
 
         await paymentResolvers.Mutation.verifyPayment(null, {
@@ -317,7 +317,7 @@ describe("PaymentResolvers.reconcilePayment", () => {
 
     it("keys the lookup on the registration id, not the stored order id", async () => {
         mockDelegate.getById.mockResolvedValue(ok({ ...delegateRow, razorpay_order_id: "order_STALE" } as never));
-        mockReconcile.mockResolvedValue(gatewayWithCapture);
+        mockReconcile.mockResolvedValue(ok(gatewayWithCapture));
 
         const result = await paymentResolvers.Mutation.reconcilePayment(
             null,
@@ -351,7 +351,7 @@ describe("PaymentResolvers.reconcilePayment", () => {
         ["refunded", false],
     ])("reports settleable=%s correctly when our record is %s", async (status, expected) => {
         mockDelegate.getById.mockResolvedValue(ok({ ...delegateRow, payment_status: status } as never));
-        mockReconcile.mockResolvedValue(gatewayWithCapture);
+        mockReconcile.mockResolvedValue(ok(gatewayWithCapture));
 
         const result = await paymentResolvers.Mutation.reconcilePayment(
             null,
@@ -364,7 +364,7 @@ describe("PaymentResolvers.reconcilePayment", () => {
 
     it("is never settleable when the gateway captured nothing", async () => {
         mockDelegate.getById.mockResolvedValue(ok(delegateRow as never));
-        mockReconcile.mockResolvedValue(gatewayWithNothing);
+        mockReconcile.mockResolvedValue(ok(gatewayWithNothing));
 
         const result = await paymentResolvers.Mutation.reconcilePayment(
             null,
@@ -384,7 +384,7 @@ describe("PaymentResolvers.settlePaymentFromGateway", () => {
 
     it("settles using the order that actually holds the money", async () => {
         mockDelegate.getById.mockResolvedValue(ok({ ...delegateRow, razorpay_order_id: "order_STALE" } as never));
-        mockReconcile.mockResolvedValue(gatewayWithCapture);
+        mockReconcile.mockResolvedValue(ok(gatewayWithCapture));
         mockDelegate.markPaidFromGateway.mockResolvedValue(ok(true));
 
         const result = await paymentResolvers.Mutation.settlePaymentFromGateway(
@@ -404,7 +404,7 @@ describe("PaymentResolvers.settlePaymentFromGateway", () => {
 
     it("does not re-query the gateway after committing", async () => {
         mockDelegate.getById.mockResolvedValue(ok(delegateRow as never));
-        mockReconcile.mockResolvedValue(gatewayWithCapture);
+        mockReconcile.mockResolvedValue(ok(gatewayWithCapture));
         mockDelegate.markPaidFromGateway.mockResolvedValue(ok(true));
 
         await paymentResolvers.Mutation.settlePaymentFromGateway(
@@ -420,7 +420,7 @@ describe("PaymentResolvers.settlePaymentFromGateway", () => {
 
     it("refuses when the gateway captured nothing", async () => {
         mockDelegate.getById.mockResolvedValue(ok(delegateRow as never));
-        mockReconcile.mockResolvedValue(gatewayWithNothing);
+        mockReconcile.mockResolvedValue(ok(gatewayWithNothing));
 
         await expect(
             paymentResolvers.Mutation.settlePaymentFromGateway(
@@ -434,7 +434,7 @@ describe("PaymentResolvers.settlePaymentFromGateway", () => {
 
     it("refuses to settle a refunded registration", async () => {
         mockDelegate.getById.mockResolvedValue(ok({ ...delegateRow, payment_status: "refunded" } as never));
-        mockReconcile.mockResolvedValue(gatewayWithCapture);
+        mockReconcile.mockResolvedValue(ok(gatewayWithCapture));
 
         await expect(
             paymentResolvers.Mutation.settlePaymentFromGateway(

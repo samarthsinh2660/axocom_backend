@@ -1,8 +1,18 @@
+import { err, ok, type Result } from "neverthrow";
+import type { RequestError } from "../../utils/error";
 import type { GraphQLContext } from "../context";
 import { toGraphQLError } from "../context";
 import { delegatePassRepository } from "../../repositories/delegate_pass.repository";
 import { nominationRepository } from "../../repositories/nomination.repository";
-import { ERRORS, isRequestError } from "../../utils/error";
+import { ERRORS } from "../../utils/error";
+import {
+    PAYMENT_STATUS,
+    SETTLEABLE_PAYMENT_STATUSES,
+} from "../../models/delegate_pass.model";
+import {
+    REGISTRATION_TYPE,
+    type RegistrationType,
+} from "../../models/registration_type.model";
 import createLogger from "../../utils/logger";
 import {
     createRazorpayOrder,
@@ -14,15 +24,13 @@ import { requireAdmin } from "../context";
 
 const logger = createLogger("@payment.resolver");
 
-type RegistrationType = "delegate_pass" | "nomination";
-
 /** Normalises both registration tables to the fields payments need. */
 async function loadRegistration(registrationType: RegistrationType, registrationId: string) {
-    if (registrationType === "delegate_pass") {
+    if (registrationType === REGISTRATION_TYPE.DELEGATE_PASS) {
         const result = await delegatePassRepository.getById(registrationId);
-        if (result.isErr()) throw toGraphQLError(result.error);
+        if (result.isErr()) return err(result.error);
         const row = result.value;
-        return {
+        return ok({
             amount: Number(row.total_amount),
             currency: row.currency,
             paymentStatus: row.payment_status,
@@ -30,13 +38,13 @@ async function loadRegistration(registrationType: RegistrationType, registration
             name: row.full_name,
             email: row.email,
             phone: row.phone,
-        };
+        });
     }
 
     const result = await nominationRepository.getById(registrationId);
-    if (result.isErr()) throw toGraphQLError(result.error);
+    if (result.isErr()) return err(result.error);
     const row = result.value;
-    return {
+    return ok({
         amount: Number(row.total_amount),
         currency: row.currency,
         paymentStatus: row.payment_status,
@@ -44,28 +52,27 @@ async function loadRegistration(registrationType: RegistrationType, registration
         name: row.nominee_name,
         email: row.email,
         phone: row.phone,
-    };
+    });
 }
 
 const repositoryFor = (registrationType: RegistrationType) =>
-    registrationType === "delegate_pass" ? delegatePassRepository : nominationRepository;
+    registrationType === REGISTRATION_TYPE.DELEGATE_PASS
+        ? delegatePassRepository
+        : nominationRepository;
 
 async function buildReconciliation(
     registrationType: RegistrationType,
     registrationId: string
 ) {
-    const registration = await loadRegistration(registrationType, registrationId);
+    const registrationResult = await loadRegistration(registrationType, registrationId);
+    if (registrationResult.isErr()) throw toGraphQLError(registrationResult.error);
+    const registration = registrationResult.value;
 
-    let gateway;
-    try {
-        // Keyed on the registration id, which every order carries as its
-        // receipt. The row's razorpay_order_id holds only the latest attempt.
-        gateway = await reconcileByReceipt(registrationId);
-    } catch (error) {
-        if (isRequestError(error)) throw toGraphQLError(error);
-        logger.error("Unexpected error reconciling payment:", error);
-        throw toGraphQLError(ERRORS.RAZORPAY_ORDER_FAILED);
-    }
+    // Keyed on the registration id, which every order carries as its receipt.
+    // The row's razorpay_order_id holds only the latest attempt.
+    const gatewayResult = await reconcileByReceipt(registrationId);
+    if (gatewayResult.isErr()) throw toGraphQLError(gatewayResult.error);
+    const gateway = gatewayResult.value;
 
     return {
         registrationId,
@@ -81,7 +88,7 @@ async function buildReconciliation(
         // captured payment at the gateway, so "not paid" would be wrong here.
         settleable:
             gateway.capturedPayment !== null
-            && (registration.paymentStatus === "pending" || registration.paymentStatus === "failed"),
+            && SETTLEABLE_PAYMENT_STATUSES.includes(registration.paymentStatus),
     };
 }
 
@@ -92,26 +99,23 @@ export const paymentResolvers = {
             args: { registrationType: RegistrationType; registrationId: string }
         ) => {
             const { registrationType, registrationId } = args;
-            const registration = await loadRegistration(registrationType, registrationId);
+            const registrationResult = await loadRegistration(registrationType, registrationId);
+            if (registrationResult.isErr()) throw toGraphQLError(registrationResult.error);
+            const registration = registrationResult.value;
 
-            if (registration.paymentStatus === "paid") {
+            if (registration.paymentStatus === PAYMENT_STATUS.PAID) {
                 throw toGraphQLError(ERRORS.PAYMENT_ALREADY_COMPLETED);
             }
 
-            let order;
-            try {
-                order = await createRazorpayOrder({
-                    // From the stored row, never the request.
-                    amount: registration.amount,
-                    currency: registration.currency,
-                    receipt: registrationId,
-                    notes: { registrationType, registrationId },
-                });
-            } catch (error) {
-                if (isRequestError(error)) throw toGraphQLError(error);
-                logger.error("Unexpected error creating payment order:", error);
-                throw toGraphQLError(ERRORS.RAZORPAY_ORDER_FAILED);
-            }
+            const orderResult = await createRazorpayOrder({
+                // From the stored row, never the request.
+                amount: registration.amount,
+                currency: registration.currency,
+                receipt: registrationId,
+                notes: { registrationType, registrationId },
+            });
+            if (orderResult.isErr()) throw toGraphQLError(orderResult.error);
+            const order = orderResult.value;
 
             const attached = await repositoryFor(registrationType).attachRazorpayOrder(
                 registrationId,
@@ -119,11 +123,14 @@ export const paymentResolvers = {
             );
             if (attached.isErr()) throw toGraphQLError(attached.error);
 
+            const keyIdResult = getRazorpayKeyId();
+            if (keyIdResult.isErr()) throw toGraphQLError(keyIdResult.error);
+
             return {
                 orderId: order.orderId,
                 amount: order.amount,
                 currency: order.currency,
-                keyId: getRazorpayKeyId(),
+                keyId: keyIdResult.value,
                 registrationId,
                 registrationType,
                 prefillName: registration.name,
@@ -178,7 +185,11 @@ export const paymentResolvers = {
 
             // Built from what we hold: the row is committed, so a timeout on a
             // second round-trip would report a failure for a successful settle.
-            return { ...reconciliation, ourPaymentStatus: "paid", settleable: false };
+            return {
+                ...reconciliation,
+                ourPaymentStatus: PAYMENT_STATUS.PAID,
+                settleable: false,
+            };
         },
 
         verifyPayment: async (
@@ -199,16 +210,11 @@ export const paymentResolvers = {
                 throw toGraphQLError(ERRORS.INVALID_REQUEST_BODY);
             }
 
-            let signatureValid: boolean;
-            try {
-                signatureValid = verifyPaymentSignature(input);
-            } catch (error) {
-                if (isRequestError(error)) throw toGraphQLError(error);
-                throw toGraphQLError(ERRORS.RAZORPAY_NOT_CONFIGURED);
-            }
+            const signatureResult = verifyPaymentSignature(input);
+            if (signatureResult.isErr()) throw toGraphQLError(signatureResult.error);
 
             // Nothing is written; the registration stays unpaid.
-            if (!signatureValid) {
+            if (!signatureResult.value) {
                 logger.error(
                     `Rejected payment with invalid signature for ${input.registrationType} ${input.registrationId}`
                 );
@@ -228,7 +234,7 @@ export const paymentResolvers = {
             return {
                 verified: true,
                 registrationId: input.registrationId,
-                paymentStatus: "paid",
+                paymentStatus: PAYMENT_STATUS.PAID,
                 razorpayPaymentId: input.razorpayPaymentId,
                 razorpayOrderId: input.razorpayOrderId,
             };

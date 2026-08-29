@@ -30,6 +30,13 @@ const {
 } = require("./razorpay");
 const { ERRORS } = require("./error");
 
+/** verifyPaymentSignature returns Result<boolean>; unwrap for the assertion. */
+function expectSignature(input: any, expected: boolean) {
+    const result = verifyPaymentSignature(input);
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) expect(result.value).toBe(expected);
+}
+
 const sign = (orderId: string, paymentId: string, secret = KEY_SECRET) =>
     createHmac("sha256", secret).update(`${orderId}|${paymentId}`).digest("hex");
 
@@ -38,11 +45,11 @@ describe("verifyPaymentSignature", () => {
     const razorpayPaymentId = "pay_XYZ789";
 
     it("accepts a signature produced with the key secret", () => {
-        expect(verifyPaymentSignature({
+        expectSignature({
             razorpayOrderId,
             razorpayPaymentId,
             razorpaySignature: sign(razorpayOrderId, razorpayPaymentId),
-        })).toBe(true);
+        }, true);
     });
 
     /**
@@ -50,43 +57,43 @@ describe("verifyPaymentSignature", () => {
      * only Razorpay can produce the matching digest.
      */
     it("rejects a signature forged with the wrong secret", () => {
-        expect(verifyPaymentSignature({
+        expectSignature({
             razorpayOrderId,
             razorpayPaymentId,
             razorpaySignature: sign(razorpayOrderId, razorpayPaymentId, "attacker_secret"),
-        })).toBe(false);
+        }, false);
     });
 
     it("rejects a signature lifted from a different order", () => {
-        expect(verifyPaymentSignature({
+        expectSignature({
             razorpayOrderId: "order_OTHER",
             razorpayPaymentId,
             razorpaySignature: sign(razorpayOrderId, razorpayPaymentId),
-        })).toBe(false);
+        }, false);
     });
 
     it("rejects a signature lifted from a different payment", () => {
-        expect(verifyPaymentSignature({
+        expectSignature({
             razorpayOrderId,
             razorpayPaymentId: "pay_OTHER",
             razorpaySignature: sign(razorpayOrderId, razorpayPaymentId),
-        })).toBe(false);
+        }, false);
     });
 
     it("is not fooled by order and payment ids being swapped", () => {
-        expect(verifyPaymentSignature({
+        expectSignature({
             razorpayOrderId: razorpayPaymentId,
             razorpayPaymentId: razorpayOrderId,
             razorpaySignature: sign(razorpayOrderId, razorpayPaymentId),
-        })).toBe(false);
+        }, false);
     });
 
     it("returns false rather than throwing on a length mismatch", () => {
-        expect(verifyPaymentSignature({
+        expectSignature({
             razorpayOrderId,
             razorpayPaymentId,
             razorpaySignature: "short",
-        })).toBe(false);
+        }, false);
     });
 
     it("returns false when any field is missing", () => {
@@ -95,12 +102,12 @@ describe("verifyPaymentSignature", () => {
             { razorpayPaymentId: "" },
             { razorpaySignature: "" },
         ]) {
-            expect(verifyPaymentSignature({
+            expectSignature({
                 razorpayOrderId,
                 razorpayPaymentId,
                 razorpaySignature: sign(razorpayOrderId, razorpayPaymentId),
                 ...patch,
-            })).toBe(false);
+            }, false);
         }
     });
 });
@@ -124,7 +131,10 @@ describe("createRazorpayOrder", () => {
             notes: { registrationId: "dlg_1" },
         });
 
-        expect(order).toEqual({ orderId: "order_ABC123", amount: 599800, currency: "INR" });
+        expect(order.isOk()).toBe(true);
+        if (order.isOk()) {
+            expect(order.value).toEqual({ orderId: "order_ABC123", amount: 599800, currency: "INR" });
+        }
         expect(mockOrdersCreate).toHaveBeenCalledWith({
             amount: 599800,
             currency: "INR",
@@ -135,42 +145,46 @@ describe("createRazorpayOrder", () => {
 
     it("refuses an amount below the Razorpay minimum without calling the API", async () => {
         for (const amount of [0, 99, -100]) {
-            await expect(
-                createRazorpayOrder({ amount, currency: "INR", receipt: "dlg_1" })
-            ).rejects.toBe(ERRORS.INVALID_ORDER_AMOUNT);
+            const result = await createRazorpayOrder({ amount, currency: "INR", receipt: "dlg_1" });
+            expect(result.isErr()).toBe(true);
+            if (result.isErr()) expect(result.error).toBe(ERRORS.INVALID_ORDER_AMOUNT);
         }
         expect(mockOrdersCreate).not.toHaveBeenCalled();
     });
 
     it("refuses a fractional amount", async () => {
-        await expect(
-            createRazorpayOrder({ amount: 100.5, currency: "INR", receipt: "dlg_1" })
-        ).rejects.toBe(ERRORS.INVALID_ORDER_AMOUNT);
+        const result = await createRazorpayOrder({ amount: 100.5, currency: "INR", receipt: "dlg_1" });
+        expect(result.isErr()).toBe(true);
+        if (result.isErr()) expect(result.error).toBe(ERRORS.INVALID_ORDER_AMOUNT);
         expect(mockOrdersCreate).not.toHaveBeenCalled();
     });
 
     it("accepts exactly the minimum amount", async () => {
         mockOrdersCreate.mockResolvedValue({ id: "order_MIN", amount: 100, currency: "INR" });
 
-        await expect(
-            createRazorpayOrder({ amount: MIN_ORDER_AMOUNT, currency: "INR", receipt: "dlg_1" })
-        ).resolves.toMatchObject({ orderId: "order_MIN" });
+        const result = await createRazorpayOrder({
+            amount: MIN_ORDER_AMOUNT,
+            currency: "INR",
+            receipt: "dlg_1",
+        });
+        expect(result.isOk()).toBe(true);
+        if (result.isOk()) expect(result.value.orderId).toBe("order_MIN");
     });
 
     it("maps a 401 from Razorpay to an auth failure", async () => {
         mockOrdersCreate.mockRejectedValue({ statusCode: 401 });
 
-        await expect(
-            createRazorpayOrder({ amount: 599800, currency: "INR", receipt: "dlg_1" })
-        ).rejects.toBe(ERRORS.RAZORPAY_AUTH_FAILED);
+        const result = await createRazorpayOrder({ amount: 599800, currency: "INR", receipt: "dlg_1" });
+        expect(result.isErr()).toBe(true);
+        if (result.isErr()) expect(result.error).toBe(ERRORS.RAZORPAY_AUTH_FAILED);
     });
 
     it("maps any other gateway failure to an order failure", async () => {
         mockOrdersCreate.mockRejectedValue({ statusCode: 500, error: "server error" });
 
-        await expect(
-            createRazorpayOrder({ amount: 599800, currency: "INR", receipt: "dlg_1" })
-        ).rejects.toBe(ERRORS.RAZORPAY_ORDER_FAILED);
+        const result = await createRazorpayOrder({ amount: 599800, currency: "INR", receipt: "dlg_1" });
+        expect(result.isErr()).toBe(true);
+        if (result.isErr()) expect(result.error).toBe(ERRORS.RAZORPAY_ORDER_FAILED);
     });
 });
 
@@ -180,7 +194,11 @@ describe("configuration", () => {
     });
 
     it("exposes only the public key id", () => {
-        expect(getRazorpayKeyId()).toBe(KEY_ID);
-        expect(getRazorpayKeyId()).not.toContain(KEY_SECRET);
+        const result = getRazorpayKeyId();
+        expect(result.isOk()).toBe(true);
+        if (result.isOk()) {
+            expect(result.value).toBe(KEY_ID);
+            expect(result.value).not.toContain(KEY_SECRET);
+        }
     });
 });

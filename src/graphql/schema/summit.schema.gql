@@ -1,3 +1,9 @@
+"""Which registration a payment, refund or query belongs to."""
+enum RegistrationType {
+  delegate_pass
+  nomination
+}
+
 """
 Money state of a summit registration. Amounts are always stored and returned
 in the smallest currency unit (paise for INR), matching Razorpay's convention.

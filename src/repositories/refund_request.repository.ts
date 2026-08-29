@@ -5,7 +5,10 @@ import { db } from "../dataconfig/db";
 import {
     REFUND_REQUEST_MESSAGES_TABLE,
     REFUND_REQUESTS_TABLE,
+    REFUND_STATUS,
     REFUND_STATUSES,
+    CLOSING_REFUND_STATUSES,
+    SUPPORT_REQUEST_TYPE,
     type CreateRefundRequestInput,
     type RefundMessageAuthor,
     type RefundRequestMessageRow,
@@ -16,6 +19,11 @@ import {
 } from "../models/refund_request.model";
 import { DELEGATE_PASS_REGISTRATIONS_TABLE } from "../models/delegate_pass.model";
 import { NOMINATION_REGISTRATIONS_TABLE } from "../models/nomination.model";
+import {
+    REGISTRATION_TYPE,
+    isRegistrationType,
+    type RegistrationType,
+} from "../models/registration_type.model";
 import { ERRORS, RequestError } from "../utils/error";
 import createLogger from "../utils/logger";
 import { isValidNormalizedPhone, normalizeEmail, normalizePhone } from "../utils/normalize";
@@ -23,11 +31,9 @@ import { buildPagination, clampPage, type Paginated } from "../utils/pagination"
 
 const logger = createLogger("@refund_request.repository");
 
-const REGISTRATION_TYPES = ["delegate_pass", "nomination"];
-
-const REGISTRATION_TABLES: Record<string, string> = {
-    delegate_pass: DELEGATE_PASS_REGISTRATIONS_TABLE,
-    nomination: NOMINATION_REGISTRATIONS_TABLE,
+const REGISTRATION_TABLES: Record<RegistrationType, string> = {
+    [REGISTRATION_TYPE.DELEGATE_PASS]: DELEGATE_PASS_REGISTRATIONS_TABLE,
+    [REGISTRATION_TYPE.NOMINATION]: NOMINATION_REGISTRATIONS_TABLE,
 };
 
 function newMessageId() {
@@ -45,11 +51,11 @@ class RefundRequestRepository {
         if (!input.reason?.trim()) {
             return err(ERRORS.REFUND_REASON_REQUIRED);
         }
-        if (!REGISTRATION_TYPES.includes(input.registrationType)) {
+        if (!isRegistrationType(input.registrationType)) {
             return err(ERRORS.INVALID_REGISTRATION_TYPE);
         }
         // Without a reference nothing ties the ticket to a registration.
-        const requestType: SupportRequestType = input.requestType ?? "refund";
+        const requestType: SupportRequestType = input.requestType ?? SUPPORT_REQUEST_TYPE.REFUND;
         if (!SUPPORT_REQUEST_TYPES.includes(requestType)) {
             return err(ERRORS.INVALID_SUPPORT_REQUEST_TYPE);
         }
@@ -108,7 +114,7 @@ class RefundRequestRepository {
                 [newMessageId(), ticketId, reason]
             );
             await connection.commit();
-            return ok({ ticketId, status: "open" });
+            return ok({ ticketId, status: REFUND_STATUS.OPEN });
         } catch (error) {
             await connection.rollback();
             logger.error("Error creating refund request:", error);
@@ -222,7 +228,7 @@ class RefundRequestRepository {
     ): Promise<Result<true, RequestError>> {
         if (!REFUND_STATUSES.includes(status)) return err(ERRORS.INVALID_REFUND_STATUS);
 
-        const isResolved = ["approved", "rejected", "refunded", "resolved"].includes(status);
+        const isResolved = CLOSING_REFUND_STATUSES.includes(status);
 
         try {
             const [result] = await db.execute<ResultSetHeader>(

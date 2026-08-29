@@ -1,13 +1,4 @@
 """
-Which registration a payment belongs to. The amount is always read from that
-stored row, never sent by the client.
-"""
-enum PaymentRegistrationType {
-  delegate_pass
-  nomination
-}
-
-"""
 Everything the browser needs to open Razorpay Checkout. `keyId` is the public
 Razorpay key; it is served from here rather than baked into the frontend build
 so the client can never drift out of sync with the server's key pair.
@@ -18,7 +9,7 @@ type PaymentOrder {
   currency: String!
   keyId: String!
   registrationId: ID!
-  registrationType: PaymentRegistrationType!
+  registrationType: RegistrationType!
   prefillName: String!
   prefillEmail: String!
   prefillContact: String!
@@ -64,7 +55,7 @@ type PaymentReconciliation {
 }
 
 input VerifyPaymentInput {
-  registrationType: PaymentRegistrationType!
+  registrationType: RegistrationType!
   registrationId: ID!
   razorpayOrderId: String!
   razorpayPaymentId: String!
@@ -77,7 +68,7 @@ extend type Mutation {
   from the stored registration, so the caller cannot choose what to pay.
   """
   createPaymentOrder(
-    registrationType: PaymentRegistrationType!
+    registrationType: RegistrationType!
     registrationId: ID!
   ): PaymentOrder!
 
@@ -92,7 +83,7 @@ extend type Mutation {
   safe to run against any claim. A fabricated payment simply will not be there.
   """
   reconcilePayment(
-    registrationType: PaymentRegistrationType!
+    registrationType: RegistrationType!
     registrationId: ID!
   ): PaymentReconciliation!
 
@@ -102,7 +93,7 @@ extend type Mutation {
   paid on an admin's say-so.
   """
   settlePaymentFromGateway(
-    registrationType: PaymentRegistrationType!
+    registrationType: RegistrationType!
     registrationId: ID!
   ): PaymentReconciliation!
 }

@@ -44,32 +44,45 @@ CREATE TABLE IF NOT EXISTS refund_request_messages (
 ) ENGINE=InnoDB
 `;
 
-export type RefundStatus =
-    | "open"
-    | "in_review"
-    | "approved"
-    | "rejected"
-    | "refunded"
-    | "resolved";
+export const REFUND_STATUS = {
+    OPEN: "open",
+    IN_REVIEW: "in_review",
+    APPROVED: "approved",
+    REJECTED: "rejected",
+    REFUNDED: "refunded",
+    RESOLVED: "resolved",
+} as const;
+
+export type RefundStatus = (typeof REFUND_STATUS)[keyof typeof REFUND_STATUS];
 
 /** What the request is about. Only the closing status differs between them. */
-export type SupportRequestType = "refund" | "payment_not_reflected" | "other";
+export const SUPPORT_REQUEST_TYPE = {
+    REFUND: "refund",
+    PAYMENT_NOT_REFLECTED: "payment_not_reflected",
+    OTHER: "other",
+} as const;
 
-export const SUPPORT_REQUEST_TYPES: SupportRequestType[] = [
-    "refund",
-    "payment_not_reflected",
-    "other",
-];
-export type RefundRegistrationType = "delegate_pass" | "nomination";
-export type RefundMessageAuthor = "user" | "admin";
+export type SupportRequestType =
+    (typeof SUPPORT_REQUEST_TYPE)[keyof typeof SUPPORT_REQUEST_TYPE];
 
-export const REFUND_STATUSES: RefundStatus[] = [
-    "open",
-    "in_review",
-    "approved",
-    "rejected",
-    "refunded",
-    "resolved",
+export const SUPPORT_REQUEST_TYPES: SupportRequestType[] = Object.values(SUPPORT_REQUEST_TYPE);
+import type { RegistrationType } from "./registration_type.model";
+
+/** Alias kept so refund code reads in its own terms; one definition underneath. */
+export type RefundRegistrationType = RegistrationType;
+export const REFUND_MESSAGE_AUTHOR = { USER: "user", ADMIN: "admin" } as const;
+
+export type RefundMessageAuthor =
+    (typeof REFUND_MESSAGE_AUTHOR)[keyof typeof REFUND_MESSAGE_AUTHOR];
+
+export const REFUND_STATUSES: RefundStatus[] = Object.values(REFUND_STATUS);
+
+/** Statuses that close a ticket and stamp resolved_at. */
+export const CLOSING_REFUND_STATUSES: RefundStatus[] = [
+    REFUND_STATUS.APPROVED,
+    REFUND_STATUS.REJECTED,
+    REFUND_STATUS.REFUNDED,
+    REFUND_STATUS.RESOLVED,
 ];
 
 export interface RefundRequestRow extends RowDataPacket {
