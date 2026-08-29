@@ -3,7 +3,8 @@ import { requireAdmin, toGraphQLError } from "../context";
 import { delegatePassRepository } from "../../repositories/delegate_pass.repository";
 import { nominationRepository } from "../../repositories/nomination.repository";
 import { refundRequestRepository } from "../../repositories/refund_request.repository";
-import type { PaymentStatus } from "../../models/delegate_pass.model";
+import type { CreateDelegatePassInput, PaymentStatus } from "../../models/delegate_pass.model";
+import type { CreateNominationInput } from "../../models/nomination.model";
 import { REFUND_STATUS } from "../../models/refund_request.model";
 
 function mapDelegatePass(row: Record<string, unknown>) {
@@ -151,18 +152,45 @@ export const summitResolvers = {
     Mutation: {
         registerDelegatePass: async (
             _: unknown,
-            args: { input: Parameters<typeof delegatePassRepository.create>[0] }
+            args: { input: CreateDelegatePassInput & { unitAmount?: number; audience?: string } }
         ) => {
-            const result = await delegatePassRepository.create(args.input);
+            const { input } = args;
+            // Built field by field rather than forwarded whole: the input type
+            // still accepts unitAmount and audience from older clients, and
+            // neither may reach the repository.
+            const result = await delegatePassRepository.create({
+                fullName: input.fullName,
+                designation: input.designation,
+                organisation: input.organisation,
+                email: input.email,
+                phone: input.phone,
+                passName: input.passName,
+                quantity: input.quantity,
+                gstNumber: input.gstNumber,
+                startupDetails: input.startupDetails,
+                contactConsent: input.contactConsent,
+            });
             if (result.isErr()) throw toGraphQLError(result.error);
             return result.value;
         },
 
         registerNomination: async (
             _: unknown,
-            args: { input: Parameters<typeof nominationRepository.create>[0] }
+            args: { input: CreateNominationInput & { baseAmount?: number } }
         ) => {
-            const result = await nominationRepository.create(args.input);
+            const { input } = args;
+            // See registerDelegatePass: baseAmount is accepted but never passed on.
+            const result = await nominationRepository.create({
+                nomineeName: input.nomineeName,
+                organisation: input.organisation,
+                designation: input.designation,
+                email: input.email,
+                phone: input.phone,
+                website: input.website,
+                achievements: input.achievements,
+                planName: input.planName,
+                contactConsent: input.contactConsent,
+            });
             if (result.isErr()) throw toGraphQLError(result.error);
             return result.value;
         },

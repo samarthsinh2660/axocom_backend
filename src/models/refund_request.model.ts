@@ -66,7 +66,7 @@ export type SupportRequestType =
     (typeof SUPPORT_REQUEST_TYPE)[keyof typeof SUPPORT_REQUEST_TYPE];
 
 export const SUPPORT_REQUEST_TYPES: SupportRequestType[] = Object.values(SUPPORT_REQUEST_TYPE);
-import type { RegistrationType } from "./registration_type.model";
+import type { RegistrationType } from "../utils/registration_type";
 
 /** Alias kept so refund code reads in its own terms; one definition underneath. */
 export type RefundRegistrationType = RegistrationType;

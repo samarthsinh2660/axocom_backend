@@ -4,13 +4,16 @@ import { RAZORPAY_WEBHOOK_SECRET } from "../../config/env";
 import { delegatePassRepository } from "../../repositories/delegate_pass.repository";
 import { nominationRepository } from "../../repositories/nomination.repository";
 import createLogger from "../../utils/logger";
+import { ERRORS } from "../../utils/error";
 import {
     REGISTRATION_TYPE,
     isRegistrationType,
     type RegistrationType,
-} from "../../models/registration_type.model";
+} from "../../utils/registration_type";
 
 const logger = createLogger("@razorpay.webhook");
+
+const EVENT_PAYMENT_CAPTURED = "payment.captured";
 
 /**
  * Records a payment straight from Razorpay, covering the case where the payer's
@@ -80,10 +83,10 @@ razorpayWebhookRoutes.post(
             return res.status(400).json({ success: false });
         }
 
-        // Acknowledge first: Razorpay retries on a non-2xx.
-        res.status(200).json({ success: true });
-
-        if (payload.event !== "payment.captured") return;
+        // Events we do not act on are simply acknowledged.
+        if (payload.event !== EVENT_PAYMENT_CAPTURED) {
+            return res.status(200).json({ success: true });
+        }
 
         const entity = payload.payload?.payment?.entity;
         const paymentId = entity?.id;
@@ -94,11 +97,15 @@ razorpayWebhookRoutes.post(
             ? notedType
             : REGISTRATION_TYPE.DELEGATE_PASS;
 
+        // Unusable payload; a retry would deliver the same thing.
         if (!paymentId || !orderId || !registrationId) {
             logger.error(`Webhook ${payload.event} missing ids or registration notes`);
-            return;
+            return res.status(200).json({ success: true });
         }
 
+        // The write happens before acknowledging. Razorpay stops retrying once
+        // it sees a 2xx, so acknowledging first would strand a captured payment
+        // whenever the database was briefly unavailable.
         const settled = await repositoryFor(registrationType).markPaidFromGateway(
             registrationId,
             { orderId, paymentId },
@@ -107,15 +114,26 @@ razorpayWebhookRoutes.post(
         );
 
         if (settled.isErr()) {
-            // Already paid: the browser got there first.
-            if (settled.error.code === 90006) return;
+            // Already recorded - the browser got there first. Nothing to retry.
+            if (settled.error === ERRORS.PAYMENT_ALREADY_COMPLETED) {
+                return res.status(200).json({ success: true });
+            }
+            // A persistence failure is transient, so ask Razorpay to retry.
+            if (settled.error === ERRORS.DATABASE_ERROR) {
+                logger.error(
+                    `Webhook could not persist ${registrationType} ${registrationId}; asking for a retry`
+                );
+                return res.status(503).json({ success: false });
+            }
+            // Anything else (unknown registration) will not resolve on a retry.
             logger.error(
                 `Webhook could not settle ${registrationType} ${registrationId}: ${settled.error.message}`
             );
-            return;
+            return res.status(200).json({ success: true });
         }
 
         logger.info(`Webhook settled ${registrationType} ${registrationId} from ${paymentId}`);
+        return res.status(200).json({ success: true });
     }
 );
 

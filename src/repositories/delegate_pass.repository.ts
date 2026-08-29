@@ -5,9 +5,10 @@ import { db } from "../dataconfig/db";
 import {
     DELEGATE_PASS_REGISTRATIONS_TABLE,
     type CreateDelegatePassInput,
+    PAYABLE_PAYMENT_STATUS_SQL,
     PAYMENT_STATUS,
     PAYMENT_STATUSES,
-    SETTLEABLE_PAYMENT_STATUSES,
+    PAYABLE_PAYMENT_STATUSES,
     type DelegatePassRegistrationRow,
     type PaymentStatus,
 } from "../models/delegate_pass.model";
@@ -209,7 +210,7 @@ class DelegatePassRepository {
             const [result] = await db.execute<ResultSetHeader>(
                 `UPDATE ${DELEGATE_PASS_REGISTRATIONS_TABLE}
                  SET razorpay_order_id = ?
-                 WHERE id = ? AND payment_status <> 'paid'`,
+                 WHERE id = ? AND ${PAYABLE_PAYMENT_STATUS_SQL}`,
                 [orderId, id]
             );
             if (result.affectedRows === 0) return err(ERRORS.PAYMENT_ALREADY_COMPLETED);
@@ -230,7 +231,7 @@ class DelegatePassRepository {
     ): Promise<Result<true, RequestError>> {
         const existing = await this.getById(id);
         if (existing.isErr()) return err(existing.error);
-        if (existing.value.payment_status === PAYMENT_STATUS.PAID) {
+        if (!PAYABLE_PAYMENT_STATUSES.includes(existing.value.payment_status)) {
             return err(ERRORS.PAYMENT_ALREADY_COMPLETED);
         }
         if (existing.value.razorpay_order_id !== payment.orderId) {
@@ -244,7 +245,7 @@ class DelegatePassRepository {
                      razorpay_payment_id = ?,
                      razorpay_signature = ?,
                      paid_at = NOW()
-                 WHERE id = ? AND razorpay_order_id = ? AND payment_status <> 'paid'`,
+                 WHERE id = ? AND razorpay_order_id = ? AND ${PAYABLE_PAYMENT_STATUS_SQL}`,
                 [payment.paymentId, payment.signature, id, payment.orderId]
             );
             if (result.affectedRows === 0) return err(ERRORS.PAYMENT_ALREADY_COMPLETED);
@@ -272,7 +273,7 @@ class DelegatePassRepository {
         if (existing.isErr()) return err(existing.error);
         // A refunded row still has a captured payment at the gateway, so
         // "not paid" would let a refund be flipped back to paid.
-        if (!SETTLEABLE_PAYMENT_STATUSES.includes(existing.value.payment_status)) {
+        if (!PAYABLE_PAYMENT_STATUSES.includes(existing.value.payment_status)) {
             return err(ERRORS.PAYMENT_ALREADY_COMPLETED);
         }
         // Not compared against the stored column: the order id comes from a

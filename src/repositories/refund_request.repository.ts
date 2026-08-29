@@ -23,7 +23,7 @@ import {
     REGISTRATION_TYPE,
     isRegistrationType,
     type RegistrationType,
-} from "../models/registration_type.model";
+} from "../utils/registration_type";
 import { ERRORS, RequestError } from "../utils/error";
 import createLogger from "../utils/logger";
 import { isValidNormalizedPhone, normalizeEmail, normalizePhone } from "../utils/normalize";

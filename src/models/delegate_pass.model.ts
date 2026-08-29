@@ -56,11 +56,18 @@ export type PaymentStatus = (typeof PAYMENT_STATUS)[keyof typeof PAYMENT_STATUS]
 
 export const PAYMENT_STATUSES: PaymentStatus[] = Object.values(PAYMENT_STATUS);
 
-/** Only a registration with no money recorded against it can be settled. */
-export const SETTLEABLE_PAYMENT_STATUSES: PaymentStatus[] = [
+/**
+ * Statuses with no money recorded against them. Every path that starts or
+ * records a payment gates on this, so a paid or refunded row cannot be
+ * charged again or flipped back to paid.
+ */
+export const PAYABLE_PAYMENT_STATUSES: PaymentStatus[] = [
     PAYMENT_STATUS.PENDING,
     PAYMENT_STATUS.FAILED,
 ];
+
+/** SQL fragment matching PAYABLE_PAYMENT_STATUSES. */
+export const PAYABLE_PAYMENT_STATUS_SQL = "payment_status IN ('pending', 'failed')";
 
 export interface DelegatePassRegistrationRow extends RowDataPacket {
     id: string;

@@ -269,6 +269,47 @@ describe("DelegatePassRepository", () => {
         expect(mockExecute.mock.calls[0][1]).toEqual(["refunded", null, "refunded", 42, "dlg_1"]);
     });
 
+    /**
+     * A refunded row has money recorded against it. Letting it back through any
+     * payment path would flip a refund to paid and corrupt the record.
+     */
+    it.each(["paid", "refunded"])("refuses to open an order for a %s registration", async (status) => {
+        mockExecute.mockResolvedValue([{ affectedRows: 0 }, []]);
+
+        const result = await delegatePassRepository.attachRazorpayOrder("dlg_1", "order_NEW");
+
+        expect(result.isErr()).toBe(true);
+        if (result.isErr()) expect(result.error).toBe(ERRORS.PAYMENT_ALREADY_COMPLETED);
+        // The guard is in SQL, so a non-payable row matches nothing.
+        expect(mockExecute.mock.calls[0][0]).toContain("payment_status IN ('pending', 'failed')");
+    });
+
+    it.each(["paid", "refunded"])("refuses to mark a %s registration paid", async (payment_status) => {
+        mockExecute.mockResolvedValue([[{ id: "dlg_1", payment_status, razorpay_order_id: "order_A" }], []]);
+
+        const result = await delegatePassRepository.markPaid("dlg_1", {
+            orderId: "order_A",
+            paymentId: "pay_1",
+            signature: "sig",
+        });
+
+        expect(result.isErr()).toBe(true);
+        if (result.isErr()) expect(result.error).toBe(ERRORS.PAYMENT_ALREADY_COMPLETED);
+    });
+
+    it.each(["paid", "refunded"])("refuses to settle a %s registration from the gateway", async (payment_status) => {
+        mockExecute.mockResolvedValue([[{ id: "dlg_1", payment_status, razorpay_order_id: "order_A" }], []]);
+
+        const result = await delegatePassRepository.markPaidFromGateway(
+            "dlg_1",
+            { orderId: "order_A", paymentId: "pay_1" },
+            7
+        );
+
+        expect(result.isErr()).toBe(true);
+        if (result.isErr()) expect(result.error).toBe(ERRORS.PAYMENT_ALREADY_COMPLETED);
+    });
+
     it("returns not found when the status update matches no row", async () => {
         mockExecute.mockResolvedValue([{ affectedRows: 0 }, []]);
 

@@ -160,8 +160,8 @@ describe("PaymentResolvers.createPaymentOrder", () => {
         expect(mockDelegate.attachRazorpayOrder).toHaveBeenCalledWith("dlg_1", "order_ABC123");
     });
 
-    it("refuses to open a second order for an already paid registration", async () => {
-        mockDelegate.getById.mockResolvedValue(ok({ ...delegateRow, payment_status: "paid" } as never));
+    it.each(["paid", "refunded"])("refuses to open an order for a %s registration", async (status) => {
+        mockDelegate.getById.mockResolvedValue(ok({ ...delegateRow, payment_status: status } as never));
 
         await expect(
             paymentResolvers.Mutation.createPaymentOrder(null, {

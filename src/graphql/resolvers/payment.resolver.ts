@@ -7,12 +7,12 @@ import { nominationRepository } from "../../repositories/nomination.repository";
 import { ERRORS } from "../../utils/error";
 import {
     PAYMENT_STATUS,
-    SETTLEABLE_PAYMENT_STATUSES,
+    PAYABLE_PAYMENT_STATUSES,
 } from "../../models/delegate_pass.model";
 import {
     REGISTRATION_TYPE,
     type RegistrationType,
-} from "../../models/registration_type.model";
+} from "../../utils/registration_type";
 import createLogger from "../../utils/logger";
 import {
     createRazorpayOrder,
@@ -88,7 +88,7 @@ async function buildReconciliation(
         // captured payment at the gateway, so "not paid" would be wrong here.
         settleable:
             gateway.capturedPayment !== null
-            && SETTLEABLE_PAYMENT_STATUSES.includes(registration.paymentStatus),
+            && PAYABLE_PAYMENT_STATUSES.includes(registration.paymentStatus),
     };
 }
 
@@ -103,7 +103,9 @@ export const paymentResolvers = {
             if (registrationResult.isErr()) throw toGraphQLError(registrationResult.error);
             const registration = registrationResult.value;
 
-            if (registration.paymentStatus === PAYMENT_STATUS.PAID) {
+            // A refunded row must not be re-chargeable either; the same set
+            // gates the gateway settlement path.
+            if (!PAYABLE_PAYMENT_STATUSES.includes(registration.paymentStatus)) {
                 throw toGraphQLError(ERRORS.PAYMENT_ALREADY_COMPLETED);
             }
 
