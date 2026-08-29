@@ -5,6 +5,9 @@ import { db } from "../dataconfig/db";
 import {
     DELEGATE_PASS_REGISTRATIONS_TABLE,
     type CreateDelegatePassInput,
+    PAYMENT_STATUS,
+    PAYMENT_STATUSES,
+    SETTLEABLE_PAYMENT_STATUSES,
     type DelegatePassRegistrationRow,
     type PaymentStatus,
 } from "../models/delegate_pass.model";
@@ -19,10 +22,7 @@ const logger = createLogger("@delegate_pass.repository");
 
 const MAX_QUANTITY = 10;
 const MIN_STARTUP_DETAILS = 20;
-const PAYMENT_STATUSES: PaymentStatus[] = ["pending", "paid", "failed", "refunded"];
 
-/** Only a registration with no money recorded against it can be settled. */
-const SETTLEABLE_STATUSES: PaymentStatus[] = ["pending", "failed"];
 
 class DelegatePassRepository {
     async create(input: CreateDelegatePassInput): Promise<
@@ -110,7 +110,7 @@ class DelegatePassRepository {
                 gstAmount: gst.gstAmount,
                 gstRateBps: gst.gstRateBps,
                 totalAmount: gst.totalAmount,
-                paymentStatus: "pending",
+                paymentStatus: PAYMENT_STATUS.PENDING,
             });
         } catch (error) {
             if (isDuplicateKeyError(error)) return err(ERRORS.DUPLICATE_SUBMISSION);
@@ -230,7 +230,9 @@ class DelegatePassRepository {
     ): Promise<Result<true, RequestError>> {
         const existing = await this.getById(id);
         if (existing.isErr()) return err(existing.error);
-        if (existing.value.payment_status === "paid") return err(ERRORS.PAYMENT_ALREADY_COMPLETED);
+        if (existing.value.payment_status === PAYMENT_STATUS.PAID) {
+            return err(ERRORS.PAYMENT_ALREADY_COMPLETED);
+        }
         if (existing.value.razorpay_order_id !== payment.orderId) {
             return err(ERRORS.PAYMENT_ORDER_MISMATCH);
         }
@@ -270,7 +272,7 @@ class DelegatePassRepository {
         if (existing.isErr()) return err(existing.error);
         // A refunded row still has a captured payment at the gateway, so
         // "not paid" would let a refund be flipped back to paid.
-        if (!SETTLEABLE_STATUSES.includes(existing.value.payment_status)) {
+        if (!SETTLEABLE_PAYMENT_STATUSES.includes(existing.value.payment_status)) {
             return err(ERRORS.PAYMENT_ALREADY_COMPLETED);
         }
         // Not compared against the stored column: the order id comes from a

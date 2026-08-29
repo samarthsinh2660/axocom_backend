@@ -2,7 +2,12 @@ import { randomBytes } from "node:crypto";
 import type { ResultSetHeader, RowDataPacket } from "mysql2";
 import { err, ok, type Result } from "neverthrow";
 import { db } from "../dataconfig/db";
-import type { PaymentStatus } from "../models/delegate_pass.model";
+import {
+    PAYMENT_STATUS,
+    PAYMENT_STATUSES,
+    SETTLEABLE_PAYMENT_STATUSES,
+    type PaymentStatus,
+} from "../models/delegate_pass.model";
 import {
     NOMINATION_REGISTRATIONS_TABLE,
     type CreateNominationInput,
@@ -17,10 +22,7 @@ import { findNominationPlan } from "../config/pricing";
 
 const logger = createLogger("@nomination.repository");
 
-const PAYMENT_STATUSES: PaymentStatus[] = ["pending", "paid", "failed", "refunded"];
 
-/** Only a registration with no money recorded against it can be settled. */
-const SETTLEABLE_STATUSES: PaymentStatus[] = ["pending", "failed"];
 
 class NominationRepository {
     async create(input: CreateNominationInput): Promise<
@@ -98,7 +100,7 @@ class NominationRepository {
                 gstAmount: gst.gstAmount,
                 gstRateBps: gst.gstRateBps,
                 totalAmount: gst.totalAmount,
-                paymentStatus: "pending",
+                paymentStatus: PAYMENT_STATUS.PENDING,
             });
         } catch (error) {
             if (isDuplicateKeyError(error)) return err(ERRORS.DUPLICATE_SUBMISSION);
@@ -214,7 +216,9 @@ class NominationRepository {
     ): Promise<Result<true, RequestError>> {
         const existing = await this.getById(id);
         if (existing.isErr()) return err(existing.error);
-        if (existing.value.payment_status === "paid") return err(ERRORS.PAYMENT_ALREADY_COMPLETED);
+        if (existing.value.payment_status === PAYMENT_STATUS.PAID) {
+            return err(ERRORS.PAYMENT_ALREADY_COMPLETED);
+        }
         if (existing.value.razorpay_order_id !== payment.orderId) {
             return err(ERRORS.PAYMENT_ORDER_MISMATCH);
         }
@@ -254,7 +258,7 @@ class NominationRepository {
         if (existing.isErr()) return err(existing.error);
         // A refunded row still has a captured payment at the gateway, so
         // "not paid" would let a refund be flipped back to paid.
-        if (!SETTLEABLE_STATUSES.includes(existing.value.payment_status)) {
+        if (!SETTLEABLE_PAYMENT_STATUSES.includes(existing.value.payment_status)) {
             return err(ERRORS.PAYMENT_ALREADY_COMPLETED);
         }
         // Not compared against the stored column: the order id comes from a

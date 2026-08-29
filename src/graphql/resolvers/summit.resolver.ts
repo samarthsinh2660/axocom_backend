@@ -4,6 +4,7 @@ import { delegatePassRepository } from "../../repositories/delegate_pass.reposit
 import { nominationRepository } from "../../repositories/nomination.repository";
 import { refundRequestRepository } from "../../repositories/refund_request.repository";
 import type { PaymentStatus } from "../../models/delegate_pass.model";
+import { REFUND_STATUS } from "../../models/refund_request.model";
 
 function mapDelegatePass(row: Record<string, unknown>) {
     return {
@@ -134,7 +135,7 @@ export const summitResolvers = {
             const nominationPending = await nominationRepository.countByPaymentStatus("pending");
             if (nominationPending.isErr()) throw toGraphQLError(nominationPending.error);
 
-            const openRefunds = await refundRequestRepository.countByStatus("open");
+            const openRefunds = await refundRequestRepository.countByStatus(REFUND_STATUS.OPEN);
             if (openRefunds.isErr()) throw toGraphQLError(openRefunds.error);
 
             return {

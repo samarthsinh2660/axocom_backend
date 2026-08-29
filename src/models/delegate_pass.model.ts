@@ -45,7 +45,22 @@ CREATE TABLE IF NOT EXISTS delegate_pass_registrations (
 `;
 
 /** Money state of a registration, distinct from the hackathon review status. */
-export type PaymentStatus = "pending" | "paid" | "failed" | "refunded";
+export const PAYMENT_STATUS = {
+    PENDING: "pending",
+    PAID: "paid",
+    FAILED: "failed",
+    REFUNDED: "refunded",
+} as const;
+
+export type PaymentStatus = (typeof PAYMENT_STATUS)[keyof typeof PAYMENT_STATUS];
+
+export const PAYMENT_STATUSES: PaymentStatus[] = Object.values(PAYMENT_STATUS);
+
+/** Only a registration with no money recorded against it can be settled. */
+export const SETTLEABLE_PAYMENT_STATUSES: PaymentStatus[] = [
+    PAYMENT_STATUS.PENDING,
+    PAYMENT_STATUS.FAILED,
+];
 
 export interface DelegatePassRegistrationRow extends RowDataPacket {
     id: string;
