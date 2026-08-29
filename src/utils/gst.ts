@@ -1,9 +1,6 @@
 import { GST_RATE_BPS } from "../config/env";
 
-/**
- * GST is held in basis points (1800 = 18.00%) so the rate itself is an integer
- * and never carries float error into a money calculation.
- */
+/** Basis points (1800 = 18.00%) keeps the rate an integer. */
 export const DEFAULT_GST_RATE_BPS = 1800;
 
 export function getGstRateBps(): number {
@@ -25,12 +22,10 @@ export type GstBreakdown = {
 };
 
 /**
- * GST is charged per unit and then multiplied, the way a line item on an
- * invoice works - not by taxing the combined subtotal. The two only ever differ
- * by a paisa of rounding, but the per-unit figure is the one that has to
- * reconcile against an invoice line, so it is the one we round and store.
+ * GST per unit, rounded, then multiplied by quantity - matching an invoice
+ * line rather than taxing the combined subtotal.
  *
- * All amounts are integer paise in and out.
+ * Amounts are integer paise in and out.
  */
 export function calculateGst(
     unitAmount: number,

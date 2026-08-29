@@ -1,12 +1,10 @@
 import { NODE_ENV, PAYMENT_TEST_AMOUNT_PAISE } from "./env";
 
 /**
- * The authoritative price list. Registration takes a pass or plan name and the
- * price is looked up here, so the browser never supplies an amount - otherwise
- * a VIP pass could be registered for one rupee and Checkout would faithfully
- * charge it.
+ * Authoritative price list. Registration supplies a name; the price is looked
+ * up here and never taken from the request.
  *
- * Prices are in paise and exclude GST.
+ * Amounts are paise, exclusive of GST.
  */
 
 export type DelegatePass = {
@@ -34,21 +32,12 @@ export const NOMINATION_PLANS: NominationPlan[] = [
     { name: "Platinum Nomination", baseAmount: 3499900 },
 ];
 
-/** Only these environments may collapse prices. Anything else - including an
- * unset NODE_ENV, "prod", "staging" or a typo - is treated as real money. */
+/** Allow-list, not a production check: an unset or unrecognised NODE_ENV must
+ *  fail closed to real prices. */
 const ENVIRONMENTS_ALLOWING_TEST_PRICING = ["development", "test"];
 
-/**
- * Collapses every price to a token amount so a real payment can be driven end
- * to end without moving real money.
- *
- * This is an allow-list rather than a check for production on purpose. The
- * failure mode is charging one rupee for a 24,999 rupee pass, so an unset or
- * unexpected NODE_ENV has to fail closed: `npm start` runs a bare
- * `node dist/index.js` and sets nothing, so blocking only the exact string
- * "production" would leave the switch live on a real deployment that happened
- * to inherit PAYMENT_TEST_AMOUNT_PAISE from a test environment.
- */
+/** Returns the override price, or null unless NODE_ENV is allow-listed and
+ *  PAYMENT_TEST_AMOUNT_PAISE is a positive integer. */
 function testAmountOverride(): number | null {
     if (!ENVIRONMENTS_ALLOWING_TEST_PRICING.includes(String(NODE_ENV))) return null;
     const override = Number(PAYMENT_TEST_AMOUNT_PAISE);

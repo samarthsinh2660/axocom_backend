@@ -43,10 +43,7 @@ CREATE TABLE IF NOT EXISTS delegate_pass_registrations (
 ) ENGINE=InnoDB
 `;
 
-/**
- * Money state of a registration. Distinct from the review status used by the
- * hackathon tables: a registration is never "accepted", it is paid for or not.
- */
+/** Money state of a registration, distinct from the hackathon review status. */
 export type PaymentStatus = "pending" | "paid" | "failed" | "refunded";
 
 export interface DelegatePassRegistrationRow extends RowDataPacket {

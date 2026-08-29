@@ -2,13 +2,10 @@ import { ApolloServer } from '@apollo/server';
 import type { GraphQLContext } from '../../src/graphql/context';
 import type { TokenData } from '../../src/utils/jwt';
 
-// This module is loaded by setupFilesAfterEach for EVERY test file, so nothing
-// here may import the app eagerly: graphql.loader pulls in the resolvers, which
-// pull in dataconfig/db, which opens a MySQL pool at module scope. That made
-// every suite hang when the configured database was unreachable - and pointed
-// the test process at whatever DB_HOST .env happened to hold. The app is
-// imported lazily below so only integration tests that ask for a server pay
-// that cost.
+// Loaded for every test file, so nothing here may import the app eagerly:
+// graphql.loader pulls in dataconfig/db, which opens a MySQL pool at module
+// scope and hangs the suite when the database is unreachable. Imported lazily
+// inside the helpers instead.
 
 // Create a test server for integration tests
 export function createTestServer() {

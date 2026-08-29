@@ -14,11 +14,7 @@ export const isRazorpayConfigured = (): boolean =>
 
 let client: Razorpay | null = null;
 
-/**
- * Built lazily rather than at module scope so that importing anything in this
- * file does not throw when the keys are absent - the rest of the API has to
- * keep working without payments configured.
- */
+/** Built lazily so importing this file does not throw when keys are absent. */
 export function getRazorpayClient(): Razorpay {
     if (!isRazorpayConfigured()) throw ERRORS.RAZORPAY_NOT_CONFIGURED;
     if (!client) {
@@ -41,10 +37,7 @@ export type CreatedOrder = {
     currency: string;
 };
 
-/**
- * `receipt` is our own registration id, which lets a Razorpay dashboard entry
- * be traced back to a row without a lookup table.
- */
+/** `receipt` is the registration id, so a dashboard entry maps to a row. */
 export async function createRazorpayOrder(options: {
     amount: number;
     currency: string;
@@ -70,8 +63,7 @@ export async function createRazorpayOrder(options: {
         };
     } catch (error: unknown) {
         const status = (error as { statusCode?: number })?.statusCode;
-        // 401 means our own keys are wrong, which is a deployment fault rather
-        // than anything the caller did.
+        // 401 is a bad key pair, not a caller error.
         if (status === 401) {
             logger.error("Razorpay rejected our API credentials");
             throw ERRORS.RAZORPAY_AUTH_FAILED;
@@ -82,10 +74,8 @@ export async function createRazorpayOrder(options: {
 }
 
 /**
- * Checkout returns `razorpay_signature` = HMAC-SHA256(order_id|payment_id)
- * keyed with the key secret. Recomputing it is what proves the callback came
- * from Razorpay and was not forged by the browser, so a registration must
- * never be marked paid without this returning true.
+ * Verifies HMAC-SHA256(order_id|payment_id) keyed with the key secret, in
+ * constant time. Must return true before a registration is marked paid.
  */
 export function verifyPaymentSignature(input: {
     razorpayOrderId: string;
@@ -104,9 +94,7 @@ export function verifyPaymentSignature(input: {
     const expectedBuffer = Buffer.from(expected, "utf8");
     const receivedBuffer = Buffer.from(input.razorpaySignature, "utf8");
 
-    // timingSafeEqual throws on a length mismatch, so compare lengths first;
-    // the constant-time comparison is what keeps the digest from leaking a
-    // byte at a time to an attacker probing signatures.
+    // timingSafeEqual throws on a length mismatch.
     if (expectedBuffer.length !== receivedBuffer.length) return false;
     return timingSafeEqual(expectedBuffer, receivedBuffer);
 }
@@ -132,24 +120,14 @@ export type OrderReconciliation = {
     capturedPayment: GatewayPayment | null;
 };
 
-/**
- * Asks Razorpay what actually happened to an order.
- *
- * This is the answer to "the customer says they paid". Our own database only
- * records what the browser managed to report back, so a payment made in a tab
- * that closed before verification looks identical to one that never happened -
- * and identical to a fabricated claim. Only the gateway knows which it is.
- */
+/** Fetches an order and its payments from Razorpay. */
 export async function reconcileByReceipt(receipt: string): Promise<OrderReconciliation> {
     if (!receipt) throw ERRORS.PAYMENT_ORDER_MISSING;
 
     try {
         const client = getRazorpayClient();
-        // Every order we open carries the registration id as its receipt, so
-        // this finds all of them - not just whichever one the row happens to
-        // remember. attachRazorpayOrder overwrites that column on every retry,
-        // so a customer who paid, lost the tab and pressed Pay again would
-        // otherwise leave the captured money unreachable behind the newer id.
+        // Finds every order for this registration. The row's razorpay_order_id
+        // holds only the latest attempt, which a retry overwrites.
         const orderList: any = await client.orders.all({ receipt } as never);
         const orders: any[] = orderList?.items ?? [];
         if (orders.length === 0) throw ERRORS.PAYMENT_ORDER_NOT_AT_GATEWAY;
@@ -165,8 +143,7 @@ export async function reconcileByReceipt(receipt: string): Promise<OrderReconcil
         const captured = perOrder.find((entry) =>
             entry.payments.some((p) => p.status === "captured")
         );
-        // Report against the order that actually holds the money; fall back to
-        // the most recent one when nothing was ever captured.
+        // Report against the order holding the money, else the most recent.
         const subject = captured?.order ?? orders[0];
 
         return {
@@ -232,8 +209,7 @@ export async function reconcileOrder(orderId: string): Promise<OrderReconciliati
             orderAmount: Number(order.amount),
             amountPaid: Number(order.amount_paid ?? 0),
             payments,
-            // "captured" is the only status where the money is actually ours.
-            // "authorized" means held but not taken; "failed" means nothing moved.
+            // Only "captured" means the money is ours.
             capturedPayment: payments.find((p) => p.status === "captured") ?? null,
         };
     } catch (error: unknown) {

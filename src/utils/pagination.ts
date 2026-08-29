@@ -1,8 +1,6 @@
 /**
- * Offset pagination shared by the summit registration and refund repositories.
- *
- * The hackathon repositories (solution, mentor) each carry their own copy of
- * this helper; they are left as-is. New repositories should import from here.
+ * Offset pagination for the summit and refund repositories. The hackathon
+ * repositories keep their own copies; new code should import from here.
  */
 
 export type Pagination = {

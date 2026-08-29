@@ -52,11 +52,7 @@ export type RefundStatus =
     | "refunded"
     | "resolved";
 
-/**
- * What the person is actually asking for. The thread, the registration link and
- * the gateway check are the same for all of them; only the closing status
- * differs - a payment query is "resolved", not "refunded".
- */
+/** What the request is about. Only the closing status differs between them. */
 export type SupportRequestType = "refund" | "payment_not_reflected" | "other";
 
 export const SUPPORT_REQUEST_TYPES: SupportRequestType[] = [

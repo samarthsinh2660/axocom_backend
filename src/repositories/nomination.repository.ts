@@ -49,7 +49,7 @@ class NominationRepository {
             return err(ERRORS.INVALID_REQUEST_BODY);
         }
 
-        // The price comes from the server's own list, never from the request.
+        // Price from the server list, not the request.
         const plan = findNominationPlan(input.planName);
         if (!plan) return err(ERRORS.INVALID_NOMINATION_PLAN);
 
@@ -64,7 +64,7 @@ class NominationRepository {
         }
 
         const registrationId = `nom_${randomBytes(9).toString("base64url")}`;
-        // A nomination is a single item, so quantity is always one.
+        // Single item, so quantity is one.
         const gst = calculateGst(plan.baseAmount, 1);
 
         try {
@@ -187,10 +187,7 @@ class NominationRepository {
         }
     }
 
-    /**
-     * Records the Razorpay order opened for this nomination. Re-running
-     * checkout after a dismissed modal simply overwrites the previous order.
-     */
+    /** Records the order opened for this nomination, overwriting any prior. */
     async attachRazorpayOrder(id: string, orderId: string): Promise<Result<true, RequestError>> {
         try {
             const [result] = await db.execute<ResultSetHeader>(
@@ -208,10 +205,8 @@ class NominationRepository {
     }
 
     /**
-     * Marks paid only when the order id matches the one this nomination
-     * opened, so a valid payment for a different (cheaper) registration cannot
-     * be replayed against this one. Signature validity is checked before this
-     * is ever called.
+     * Marks paid from a verified Checkout callback. The order id must match the
+     * one this nomination opened; the signature is verified before this runs.
      */
     async markPaid(
         id: string,
@@ -244,32 +239,27 @@ class NominationRepository {
 
 
     /**
-     * Settles a payment that Razorpay has captured but we never recorded,
-     * because the browser never made it back to verifyPayment.
-     *
-     * There is no signature to check here - no checkout callback ever arrived -
-     * so the signature column is left null and the admin is recorded instead.
-     * That keeps the two routes distinguishable after the fact: a signed
-     * customer callback versus a human settling it against the gateway.
+     * Settles a gateway-captured payment we never recorded. No Checkout
+     * callback arrived, so there is no signature to store; the reviewer and
+     * admin note are what mark this route apart from a verified callback.
      */
     async markPaidFromGateway(
         id: string,
         payment: { orderId: string; paymentId: string },
-        adminId: number
+        /** Null when a webhook settled it, since no human reviewed it. The
+         *  column is a foreign key to users, so a sentinel id would not hold. */
+        adminId: number | null
     ): Promise<Result<true, RequestError>> {
         const existing = await this.getById(id);
         if (existing.isErr()) return err(existing.error);
-        // Only an unpaid registration can be settled. A refunded one still has
-        // a captured payment at the gateway, so allowing anything that is not
-        // "paid" would let a refund be flipped back to paid.
+        // A refunded row still has a captured payment at the gateway, so
+        // "not paid" would let a refund be flipped back to paid.
         if (!SETTLEABLE_STATUSES.includes(existing.value.payment_status)) {
             return err(ERRORS.PAYMENT_ALREADY_COMPLETED);
         }
-        // The order id is not compared against the stored column here. It comes
-        // from a gateway lookup keyed on this registration's id as the receipt,
-        // so Razorpay itself attests the order belongs to this registration -
-        // a stronger link than a column every checkout retry overwrites. The
-        // row is corrected to the order that actually holds the money.
+        // Not compared against the stored column: the order id comes from a
+        // gateway lookup keyed on this registration's receipt. The row is
+        // corrected to the order that holds the money.
 
         try {
             const [result] = await db.execute<ResultSetHeader>(

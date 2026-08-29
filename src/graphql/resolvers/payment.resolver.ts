@@ -16,11 +16,7 @@ const logger = createLogger("@payment.resolver");
 
 type RegistrationType = "delegate_pass" | "nomination";
 
-/**
- * Both registration tables expose the same three things payments care about -
- * an amount, a currency and someone to prefill Checkout with - so the two
- * repositories are reached through one shape rather than branching everywhere.
- */
+/** Normalises both registration tables to the fields payments need. */
 async function loadRegistration(registrationType: RegistrationType, registrationId: string) {
     if (registrationType === "delegate_pass") {
         const result = await delegatePassRepository.getById(registrationId);
@@ -63,8 +59,7 @@ async function buildReconciliation(
     let gateway;
     try {
         // Keyed on the registration id, which every order carries as its
-        // receipt, rather than on the row's razorpay_order_id - that column
-        // holds only the most recent attempt.
+        // receipt. The row's razorpay_order_id holds only the latest attempt.
         gateway = await reconcileByReceipt(registrationId);
     } catch (error) {
         if (isRequestError(error)) throw toGraphQLError(error);
@@ -82,10 +77,8 @@ async function buildReconciliation(
         amountPaid: gateway.amountPaid,
         payments: gateway.payments,
         capturedPayment: gateway.capturedPayment,
-        // Money at the gateway that our own record is missing. Only pending and
-        // failed qualify: a refunded registration still has a captured payment
-        // at the gateway (a partial refund leaves the payment captured), so
-        // testing for "not paid" would offer to flip a refund back to paid.
+        // Only pending and failed qualify. A refunded registration still has a
+        // captured payment at the gateway, so "not paid" would be wrong here.
         settleable:
             gateway.capturedPayment !== null
             && (registration.paymentStatus === "pending" || registration.paymentStatus === "failed"),
@@ -108,8 +101,7 @@ export const paymentResolvers = {
             let order;
             try {
                 order = await createRazorpayOrder({
-                    // Amount is taken from the stored registration, never from
-                    // the request, so the price cannot be chosen by the caller.
+                    // From the stored row, never the request.
                     amount: registration.amount,
                     currency: registration.currency,
                     receipt: registrationId,
@@ -140,11 +132,7 @@ export const paymentResolvers = {
             };
         },
 
-        /**
-         * Read-only: reports what Razorpay holds against this registration's
-         * order. Never writes, so it is safe to run on any claim - including a
-         * fabricated one, which simply comes back with no matching payment.
-         */
+        /** Read-only report of what Razorpay holds for this registration. */
         reconcilePayment: async (
             _: unknown,
             args: { registrationType: RegistrationType; registrationId: string },
@@ -162,13 +150,11 @@ export const paymentResolvers = {
             const admin = requireAdmin(context);
             const { registrationType, registrationId } = args;
 
-            // Re-checks the gateway rather than trusting a prior read, so this
-            // cannot settle anything Razorpay has not actually captured.
+            // Re-checks the gateway rather than trusting a prior read.
             const reconciliation = await buildReconciliation(registrationType, registrationId);
 
-            // Order matters: a refunded registration still has a captured
-            // payment, so reporting "nothing was captured" would be the wrong
-            // diagnosis for an admin looking at it.
+            // Order matters: a refunded registration has a captured payment,
+            // so "nothing captured" would be the wrong diagnosis.
             if (!reconciliation.capturedPayment) {
                 throw toGraphQLError(ERRORS.PAYMENT_NOT_CAPTURED);
             }
@@ -190,9 +176,8 @@ export const paymentResolvers = {
                 `Admin ${admin.id} settled ${registrationType} ${registrationId} from gateway payment ${reconciliation.capturedPayment.paymentId}`
             );
 
-            // Built from what we already hold rather than re-querying: the row
-            // is committed by this point, so a gateway timeout on a second
-            // round-trip would report a failure for a settle that succeeded.
+            // Built from what we hold: the row is committed, so a timeout on a
+            // second round-trip would report a failure for a successful settle.
             return { ...reconciliation, ourPaymentStatus: "paid", settleable: false };
         },
 
@@ -222,8 +207,7 @@ export const paymentResolvers = {
                 throw toGraphQLError(ERRORS.RAZORPAY_NOT_CONFIGURED);
             }
 
-            // A forged or replayed callback stops here: nothing is written and
-            // the registration stays unpaid.
+            // Nothing is written; the registration stays unpaid.
             if (!signatureValid) {
                 logger.error(
                     `Rejected payment with invalid signature for ${input.registrationType} ${input.registrationId}`

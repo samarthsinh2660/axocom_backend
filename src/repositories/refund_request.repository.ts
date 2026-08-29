@@ -35,10 +35,7 @@ function newMessageId() {
 }
 
 class RefundRequestRepository {
-    /**
-     * Creates the ticket and seeds the thread with the requester's reason as the
-     * first message, so the admin conversation always starts from their words.
-     */
+    /** Creates the ticket and seeds the thread with the requester's reason. */
     async create(
         input: CreateRefundRequestInput
     ): Promise<Result<{ ticketId: string; status: RefundStatus }, RequestError>> {
@@ -51,8 +48,7 @@ class RefundRequestRepository {
         if (!REGISTRATION_TYPES.includes(input.registrationType)) {
             return err(ERRORS.INVALID_REGISTRATION_TYPE);
         }
-        // Without a reference there is nothing tying the ticket to a
-        // registration, so an admin has no reliable way to find what to refund.
+        // Without a reference nothing ties the ticket to a registration.
         const requestType: SupportRequestType = input.requestType ?? "refund";
         if (!SUPPORT_REQUEST_TYPES.includes(requestType)) {
             return err(ERRORS.INVALID_SUPPORT_REQUEST_TYPE);
@@ -67,10 +63,8 @@ class RefundRequestRepository {
             return err(new RequestError("A valid 10-digit mobile number is required", 10002, 400));
         }
 
-        // The reference must belong to the person filing. Checking the email
-        // too stops a ticket being opened against someone else's registration,
-        // and the shared error message avoids confirming whether a reference
-        // someone guessed actually exists.
+        // Scoped by email so a ticket cannot be opened on someone else's
+        // registration. One shared error message avoids confirming existence.
         try {
             const [owned] = await db.execute<Array<{ id: string } & RowDataPacket>>(
                 `SELECT id FROM ${REGISTRATION_TABLES[input.registrationType]}
@@ -124,10 +118,7 @@ class RefundRequestRepository {
         }
     }
 
-    /**
-     * Public ticket lookup. Both the ticket id and the matching email are
-     * required so a ticket id alone cannot expose someone else's request.
-     */
+    /** Public lookup: requires the ticket id and the email it was filed with. */
     async getByTicketAndEmail(
         ticketId: string,
         email: string
@@ -269,7 +260,7 @@ class RefundRequestRepository {
                  VALUES (?, ?, ?, ?, ?)`,
                 [messageId, refundRequestId, author, adminId, message.trim()]
             );
-            // Touch the parent so the admin list re-sorts on latest activity.
+            // Touch the parent so the admin list re-sorts.
             await db.execute(
                 `UPDATE ${REFUND_REQUESTS_TABLE} SET updated_at = NOW() WHERE id = ?`,
                 [refundRequestId]
