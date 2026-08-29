@@ -19,6 +19,9 @@ const logger = createLogger("@nomination.repository");
 
 const PAYMENT_STATUSES: PaymentStatus[] = ["pending", "paid", "failed", "refunded"];
 
+/** Only a registration with no money recorded against it can be settled. */
+const SETTLEABLE_STATUSES: PaymentStatus[] = ["pending", "failed"];
+
 class NominationRepository {
     async create(input: CreateNominationInput): Promise<
         Result<
@@ -256,23 +259,30 @@ class NominationRepository {
     ): Promise<Result<true, RequestError>> {
         const existing = await this.getById(id);
         if (existing.isErr()) return err(existing.error);
-        if (existing.value.payment_status === "paid") return err(ERRORS.PAYMENT_ALREADY_COMPLETED);
-        if (existing.value.razorpay_order_id !== payment.orderId) {
-            return err(ERRORS.PAYMENT_ORDER_MISMATCH);
+        // Only an unpaid registration can be settled. A refunded one still has
+        // a captured payment at the gateway, so allowing anything that is not
+        // "paid" would let a refund be flipped back to paid.
+        if (!SETTLEABLE_STATUSES.includes(existing.value.payment_status)) {
+            return err(ERRORS.PAYMENT_ALREADY_COMPLETED);
         }
+        // The order id is not compared against the stored column here. It comes
+        // from a gateway lookup keyed on this registration's id as the receipt,
+        // so Razorpay itself attests the order belongs to this registration -
+        // a stronger link than a column every checkout retry overwrites. The
+        // row is corrected to the order that actually holds the money.
 
         try {
             const [result] = await db.execute<ResultSetHeader>(
                 `UPDATE ${NOMINATION_REGISTRATIONS_TABLE}
                  SET payment_status = 'paid',
+                     razorpay_order_id = ?,
                      razorpay_payment_id = ?,
-                     razorpay_signature = NULL,
-                     paid_at = NOW(),
+                     paid_at = COALESCE(paid_at, NOW()),
                      reviewed_at = NOW(),
                      reviewed_by_admin_id = ?,
-                     admin_note = CONCAT(COALESCE(admin_note, ''), ' [settled from gateway reconciliation]')
-                 WHERE id = ? AND razorpay_order_id = ? AND payment_status <> 'paid'`,
-                [payment.paymentId, adminId, id, payment.orderId]
+                     admin_note = TRIM(CONCAT(COALESCE(admin_note, ''), ' [settled from gateway reconciliation]'))
+                 WHERE id = ? AND payment_status IN ('pending', 'failed')`,
+                [payment.orderId, payment.paymentId, adminId, id]
             );
             if (result.affectedRows === 0) return err(ERRORS.PAYMENT_ALREADY_COMPLETED);
             return ok(true);

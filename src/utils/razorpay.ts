@@ -140,6 +140,72 @@ export type OrderReconciliation = {
  * that closed before verification looks identical to one that never happened -
  * and identical to a fabricated claim. Only the gateway knows which it is.
  */
+export async function reconcileByReceipt(receipt: string): Promise<OrderReconciliation> {
+    if (!receipt) throw ERRORS.PAYMENT_ORDER_MISSING;
+
+    try {
+        const client = getRazorpayClient();
+        // Every order we open carries the registration id as its receipt, so
+        // this finds all of them - not just whichever one the row happens to
+        // remember. attachRazorpayOrder overwrites that column on every retry,
+        // so a customer who paid, lost the tab and pressed Pay again would
+        // otherwise leave the captured money unreachable behind the newer id.
+        const orderList: any = await client.orders.all({ receipt } as never);
+        const orders: any[] = orderList?.items ?? [];
+        if (orders.length === 0) throw ERRORS.PAYMENT_ORDER_NOT_AT_GATEWAY;
+
+        const perOrder = await Promise.all(
+            orders.map(async (order: any) => ({
+                order,
+                payments: toGatewayPayments(await client.orders.fetchPayments(String(order.id))),
+            }))
+        );
+
+        const payments = perOrder.flatMap((entry) => entry.payments);
+        const captured = perOrder.find((entry) =>
+            entry.payments.some((p) => p.status === "captured")
+        );
+        // Report against the order that actually holds the money; fall back to
+        // the most recent one when nothing was ever captured.
+        const subject = captured?.order ?? orders[0];
+
+        return {
+            orderId: String(subject.id),
+            orderStatus: String(subject.status),
+            orderAmount: Number(subject.amount),
+            amountPaid: orders.reduce((sum: number, o: any) => sum + Number(o.amount_paid ?? 0), 0),
+            payments,
+            capturedPayment: payments.find((p) => p.status === "captured") ?? null,
+        };
+    } catch (error: unknown) {
+        throw translateGatewayError(error, "reconciliation by receipt");
+    }
+}
+
+function toGatewayPayments(paymentList: any): GatewayPayment[] {
+    return (paymentList?.items ?? []).map((item: any) => ({
+        paymentId: String(item.id),
+        status: String(item.status),
+        amount: Number(item.amount),
+        method: item.method ? String(item.method) : null,
+        email: item.email ? String(item.email) : null,
+        contact: item.contact ? String(item.contact) : null,
+        createdAt: item.created_at ? Number(item.created_at) : null,
+    }));
+}
+
+function translateGatewayError(error: unknown, context: string): unknown {
+    if (isRequestError(error)) return error;
+    const status = (error as { statusCode?: number })?.statusCode;
+    if (status === 401) {
+        logger.error(`Razorpay rejected our API credentials during ${context}`);
+        return ERRORS.RAZORPAY_AUTH_FAILED;
+    }
+    if (status === 400 || status === 404) return ERRORS.PAYMENT_ORDER_NOT_AT_GATEWAY;
+    logger.error(`Razorpay ${context} failed:`, error);
+    return ERRORS.RAZORPAY_ORDER_FAILED;
+}
+
 export async function reconcileOrder(orderId: string): Promise<OrderReconciliation> {
     if (!orderId) throw ERRORS.PAYMENT_ORDER_MISSING;
 

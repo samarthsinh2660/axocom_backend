@@ -65,7 +65,7 @@ class RefundRequestRepository {
         // and the shared error message avoids confirming whether a reference
         // someone guessed actually exists.
         try {
-            const [owned] = await db.execute<RefundRequestRow[]>(
+            const [owned] = await db.execute<Array<{ id: string } & RowDataPacket>>(
                 `SELECT id FROM ${REGISTRATION_TABLES[input.registrationType]}
                  WHERE id = ? AND normalized_email = ?`,
                 [registrationId, normalizedEmail]

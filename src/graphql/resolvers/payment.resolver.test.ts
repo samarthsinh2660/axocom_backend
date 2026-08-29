@@ -3,7 +3,12 @@ import { err, ok } from "neverthrow";
 import { ERRORS } from "../../utils/error";
 import { delegatePassRepository } from "../../repositories/delegate_pass.repository";
 import { nominationRepository } from "../../repositories/nomination.repository";
-import { createRazorpayOrder, verifyPaymentSignature } from "../../utils/razorpay";
+import {
+    createRazorpayOrder,
+    reconcileByReceipt,
+    verifyPaymentSignature,
+} from "../../utils/razorpay";
+import type { GraphQLContext } from "../context";
 import { paymentResolvers } from "./payment.resolver";
 
 jest.mock("../../repositories/delegate_pass.repository", () => ({
@@ -11,6 +16,7 @@ jest.mock("../../repositories/delegate_pass.repository", () => ({
         getById: jest.fn(),
         attachRazorpayOrder: jest.fn(),
         markPaid: jest.fn(),
+        markPaidFromGateway: jest.fn(),
     },
 }));
 jest.mock("../../repositories/nomination.repository", () => ({
@@ -18,11 +24,13 @@ jest.mock("../../repositories/nomination.repository", () => ({
         getById: jest.fn(),
         attachRazorpayOrder: jest.fn(),
         markPaid: jest.fn(),
+        markPaidFromGateway: jest.fn(),
     },
 }));
 jest.mock("../../utils/razorpay", () => ({
     createRazorpayOrder: jest.fn(),
     verifyPaymentSignature: jest.fn(),
+    reconcileByReceipt: jest.fn(),
     getRazorpayKeyId: () => "rzp_test_example",
 }));
 
@@ -30,6 +38,45 @@ const mockDelegate = delegatePassRepository as jest.Mocked<typeof delegatePassRe
 const mockNomination = nominationRepository as jest.Mocked<typeof nominationRepository>;
 const mockCreateOrder = createRazorpayOrder as jest.MockedFunction<typeof createRazorpayOrder>;
 const mockVerifySignature = verifyPaymentSignature as jest.MockedFunction<typeof verifyPaymentSignature>;
+const mockReconcile = reconcileByReceipt as jest.MockedFunction<typeof reconcileByReceipt>;
+
+const capturedPayment = {
+    paymentId: "pay_XYZ789",
+    status: "captured",
+    amount: 707764,
+    method: "upi",
+    email: "asha@example.com",
+    contact: "9876543210",
+    createdAt: 1,
+};
+
+const gatewayWithCapture = {
+    orderId: "order_ABC123",
+    orderStatus: "paid",
+    orderAmount: 707764,
+    amountPaid: 707764,
+    payments: [capturedPayment],
+    capturedPayment,
+};
+
+const gatewayWithNothing = {
+    orderId: "order_ABC123",
+    orderStatus: "created",
+    orderAmount: 707764,
+    amountPaid: 0,
+    payments: [],
+    capturedPayment: null,
+};
+
+const adminContext = { id: 7, is_admin: true };
+
+function contextFor(user: { id: number; is_admin: boolean }): GraphQLContext {
+    return {
+        req: {} as GraphQLContext["req"],
+        user,
+        loaders: {} as GraphQLContext["loaders"],
+    };
+}
 
 const delegateRow = {
     id: "dlg_1",
@@ -260,5 +307,153 @@ describe("PaymentResolvers.verifyPayment", () => {
 
         expect(mockNomination.markPaid).toHaveBeenCalled();
         expect(mockDelegate.markPaid).not.toHaveBeenCalled();
+    });
+});
+
+describe("PaymentResolvers.reconcilePayment", () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+    });
+
+    it("keys the lookup on the registration id, not the stored order id", async () => {
+        mockDelegate.getById.mockResolvedValue(ok({ ...delegateRow, razorpay_order_id: "order_STALE" } as never));
+        mockReconcile.mockResolvedValue(gatewayWithCapture);
+
+        const result = await paymentResolvers.Mutation.reconcilePayment(
+            null,
+            { registrationType: "delegate_pass", registrationId: "dlg_1" },
+            contextFor(adminContext)
+        );
+
+        // Every order carries the registration id as its receipt, so a retry
+        // that overwrote razorpay_order_id cannot hide a captured payment.
+        expect(mockReconcile).toHaveBeenCalledWith("dlg_1");
+        expect(result.capturedPayment).toEqual(capturedPayment);
+    });
+
+    it("blocks a non-admin", async () => {
+        await expect(
+            paymentResolvers.Mutation.reconcilePayment(
+                null,
+                { registrationType: "delegate_pass", registrationId: "dlg_1" },
+                contextFor({ id: 2, is_admin: false })
+            )
+        ).rejects.toMatchObject({ extensions: { code: "FORBIDDEN" } });
+        expect(mockReconcile).not.toHaveBeenCalled();
+    });
+
+    it.each([
+        ["pending", true],
+        ["failed", true],
+        ["paid", false],
+        // A partial refund leaves the payment captured at the gateway, so
+        // "not paid" would wrongly offer to flip a refund back to paid.
+        ["refunded", false],
+    ])("reports settleable=%s correctly when our record is %s", async (status, expected) => {
+        mockDelegate.getById.mockResolvedValue(ok({ ...delegateRow, payment_status: status } as never));
+        mockReconcile.mockResolvedValue(gatewayWithCapture);
+
+        const result = await paymentResolvers.Mutation.reconcilePayment(
+            null,
+            { registrationType: "delegate_pass", registrationId: "dlg_1" },
+            contextFor(adminContext)
+        );
+
+        expect(result.settleable).toBe(expected);
+    });
+
+    it("is never settleable when the gateway captured nothing", async () => {
+        mockDelegate.getById.mockResolvedValue(ok(delegateRow as never));
+        mockReconcile.mockResolvedValue(gatewayWithNothing);
+
+        const result = await paymentResolvers.Mutation.reconcilePayment(
+            null,
+            { registrationType: "delegate_pass", registrationId: "dlg_1" },
+            contextFor(adminContext)
+        );
+
+        expect(result.settleable).toBe(false);
+        expect(result.capturedPayment).toBeNull();
+    });
+});
+
+describe("PaymentResolvers.settlePaymentFromGateway", () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+    });
+
+    it("settles using the order that actually holds the money", async () => {
+        mockDelegate.getById.mockResolvedValue(ok({ ...delegateRow, razorpay_order_id: "order_STALE" } as never));
+        mockReconcile.mockResolvedValue(gatewayWithCapture);
+        mockDelegate.markPaidFromGateway.mockResolvedValue(ok(true));
+
+        const result = await paymentResolvers.Mutation.settlePaymentFromGateway(
+            null,
+            { registrationType: "delegate_pass", registrationId: "dlg_1" },
+            contextFor(adminContext)
+        );
+
+        expect(mockDelegate.markPaidFromGateway).toHaveBeenCalledWith(
+            "dlg_1",
+            { orderId: "order_ABC123", paymentId: "pay_XYZ789" },
+            7
+        );
+        expect(result.ourPaymentStatus).toBe("paid");
+        expect(result.settleable).toBe(false);
+    });
+
+    it("does not re-query the gateway after committing", async () => {
+        mockDelegate.getById.mockResolvedValue(ok(delegateRow as never));
+        mockReconcile.mockResolvedValue(gatewayWithCapture);
+        mockDelegate.markPaidFromGateway.mockResolvedValue(ok(true));
+
+        await paymentResolvers.Mutation.settlePaymentFromGateway(
+            null,
+            { registrationType: "delegate_pass", registrationId: "dlg_1" },
+            contextFor(adminContext)
+        );
+
+        // A second round-trip could fail after the row was already written and
+        // report a failure for a settle that succeeded.
+        expect(mockReconcile).toHaveBeenCalledTimes(1);
+    });
+
+    it("refuses when the gateway captured nothing", async () => {
+        mockDelegate.getById.mockResolvedValue(ok(delegateRow as never));
+        mockReconcile.mockResolvedValue(gatewayWithNothing);
+
+        await expect(
+            paymentResolvers.Mutation.settlePaymentFromGateway(
+                null,
+                { registrationType: "delegate_pass", registrationId: "dlg_1" },
+                contextFor(adminContext)
+            )
+        ).rejects.toMatchObject({ extensions: { errorCode: 90010 } });
+        expect(mockDelegate.markPaidFromGateway).not.toHaveBeenCalled();
+    });
+
+    it("refuses to settle a refunded registration", async () => {
+        mockDelegate.getById.mockResolvedValue(ok({ ...delegateRow, payment_status: "refunded" } as never));
+        mockReconcile.mockResolvedValue(gatewayWithCapture);
+
+        await expect(
+            paymentResolvers.Mutation.settlePaymentFromGateway(
+                null,
+                { registrationType: "delegate_pass", registrationId: "dlg_1" },
+                contextFor(adminContext)
+            )
+        ).rejects.toMatchObject({ extensions: { errorCode: 90011 } });
+        expect(mockDelegate.markPaidFromGateway).not.toHaveBeenCalled();
+    });
+
+    it("blocks a non-admin", async () => {
+        await expect(
+            paymentResolvers.Mutation.settlePaymentFromGateway(
+                null,
+                { registrationType: "delegate_pass", registrationId: "dlg_1" },
+                contextFor({ id: 2, is_admin: false })
+            )
+        ).rejects.toMatchObject({ extensions: { code: "FORBIDDEN" } });
+        expect(mockDelegate.markPaidFromGateway).not.toHaveBeenCalled();
     });
 });

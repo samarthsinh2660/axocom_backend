@@ -86,8 +86,12 @@ export type CreateRefundRequestInput = {
     email: string;
     phone: string;
     registrationType: RefundRegistrationType;
-    /** Required, and must belong to the email filing the request. */
-    registrationId: string;
+    /**
+     * Required by the repository, but typed optional because the GraphQL input
+     * accepts its absence in order to return a usable error rather than a
+     * validation failure to an older client.
+     */
+    registrationId?: string | null;
     paymentReference?: string | null;
     reason: string;
 };

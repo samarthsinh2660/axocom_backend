@@ -124,6 +124,11 @@ export const ERRORS = {
     PAYMENT_ORDER_MISSING: new RequestError("No payment was ever started for this registration", 90008, 404),
     PAYMENT_ORDER_NOT_AT_GATEWAY: new RequestError("The gateway has no record of this order", 90009, 404),
     PAYMENT_NOT_CAPTURED: new RequestError("The gateway has not captured a payment for this order", 90010, 409),
+    PAYMENT_ALREADY_SETTLED: new RequestError(
+        "This registration already has its payment recorded and cannot be settled again",
+        90011,
+        409
+    ),
 
     // Refund request errors (8xxxx)
     REFUND_REQUEST_NOT_FOUND: new RequestError("Refund request not found", 80001, 404),
@@ -133,7 +138,8 @@ export const ERRORS = {
     REFUND_MESSAGE_REQUIRED: new RequestError("Message cannot be empty", 80005, 400),
     REFUND_REGISTRATION_REQUIRED: new RequestError("A registration reference is required", 80006, 400),
     REFUND_REGISTRATION_MISMATCH: new RequestError(
-        "We could not find a registration with that reference and email address",
+        "We could not find a registration with that reference and email address. "
+            + "Please use the email address the registration was made with.",
         80007,
         404
     ),
