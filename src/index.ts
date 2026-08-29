@@ -18,6 +18,8 @@ import { notFoundHandler } from './middleware/error.middleware';
 import { optionalAuth } from './middleware/auth.middleware';
 import { createLoaders } from './graphql/loaders/dataloader';
 import voterRoutes from './rest/routes/voter.route';
+import { isTestPricingActive } from './config/pricing';
+import razorpayWebhookRoutes from './rest/routes/razorpay-webhook.route';
 // async function startGraphQLServer() {
 //     const typeDefs = readFileSync(
 //         join(process.cwd(), 'src/graphql/schema/candidate.schema.graphql'),
@@ -53,6 +55,10 @@ async function startServer() {
         credentials: true
     }));
     app.use(limiter);
+
+    // Before express.json(): the webhook signature covers the raw bytes.
+    app.use('/webhooks', razorpayWebhookRoutes);
+
     app.use(express.json({ limit: '10mb' }));
     //process html data in to json form
     app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -93,6 +99,15 @@ async function startServer() {
     );
 
     await connectToDatabase();
+
+    // Test pricing rewrites every amount, so announce it on boot.
+    if (isTestPricingActive()) {
+        console.warn(
+            '\n*** TEST PRICING ACTIVE - every pass and plan is charged as PAYMENT_TEST_AMOUNT_PAISE. ***\n'
+            + '*** Real money still moves if RAZORPAY_KEY_ID is a live key. Unset it for real prices. ***\n'
+        );
+    }
+
     httpServer.listen(PORT);
     console.log(`Server is running on port ${PORT}`);
     console.log(`GraphQL endpoint is running on http://localhost:${PORT}/graphql`);

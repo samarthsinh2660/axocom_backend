@@ -1,0 +1,128 @@
+enum RefundStatus {
+  open
+  in_review
+  approved
+  rejected
+  refunded
+  """Closes a request that was never about money moving back."""
+  resolved
+}
+
+"""
+What the person is asking for. The thread, registration link and gateway check
+are identical for all of them; only the closing status differs.
+"""
+enum SupportRequestType {
+  refund
+  payment_not_reflected
+  other
+}
+
+enum RefundMessageAuthor {
+  user
+  admin
+}
+
+type RefundRequestMessage {
+  id: ID!
+  author: RefundMessageAuthor!
+  message: String!
+  createdAt: DateTime!
+}
+
+"""
+Ticket view returned by the public lookup. Carries the thread but none of the
+internal reviewer fields.
+"""
+type RefundTicket {
+  id: ID!
+  requestType: SupportRequestType!
+  fullName: String!
+  registrationType: RegistrationType!
+  registrationId: String
+  paymentReference: String
+  status: RefundStatus!
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  resolvedAt: DateTime
+  messages: [RefundRequestMessage!]!
+}
+
+type RefundRequest {
+  id: ID!
+  requestType: SupportRequestType!
+  fullName: String!
+  email: String!
+  phone: String!
+  registrationType: RegistrationType!
+  registrationId: String
+  paymentReference: String
+  reason: String!
+  status: RefundStatus!
+  resolvedAt: DateTime
+  reviewedByAdminId: Int
+  createdAt: DateTime!
+  updatedAt: DateTime!
+  messages: [RefundRequestMessage!]!
+}
+
+type RefundRequestConnection {
+  data: [RefundRequest!]!
+  pagination: Pagination!
+}
+
+type RefundRequestResult {
+  ticketId: ID!
+  status: RefundStatus!
+}
+
+input CreateRefundRequestInput {
+  """Defaults to refund when omitted, so older clients keep working."""
+  requestType: SupportRequestType
+  fullName: String!
+  email: String!
+  phone: String!
+  registrationType: RegistrationType!
+  """
+  The dlg_/nom_ reference from the registration. Required in practice - the
+  server rejects a request without it - and checked against the email above so
+  a ticket cannot be opened on someone else's registration.
+
+  Left nullable on purpose: GraphQL rejects a whole mutation for a missing
+  non-null input field, so making it String! would stop a browser running a
+  cached pre-deploy bundle from filing a refund at all, rather than showing it
+  a usable message.
+  """
+  registrationId: String
+  """Optional. The Razorpay payment id, as a secondary hint for support."""
+  paymentReference: String
+  reason: String!
+}
+
+extend type Query {
+  """
+  Public ticket lookup. Requires both the ticket id and the email it was filed
+  with, so a ticket id on its own cannot expose someone else's request.
+  """
+  refundTicket(ticketId: ID!, email: String!): RefundTicket
+  adminRefundRequests(
+    status: RefundStatus
+    requestType: SupportRequestType
+    registrationType: RegistrationType
+    search: String
+    page: Int = 1
+    limit: Int = 20
+  ): RefundRequestConnection!
+  adminRefundRequest(id: ID!): RefundRequest
+}
+
+extend type Mutation {
+  createRefundRequest(input: CreateRefundRequestInput!): RefundRequestResult!
+  """
+  Adds a message to the ticket thread from the requester. Guarded by the same
+  ticket id + email pair as the lookup.
+  """
+  replyToRefundTicket(ticketId: ID!, email: String!, message: String!): RefundRequestMessage!
+  replyToRefundRequest(id: ID!, message: String!): RefundRequestMessage!
+  updateRefundRequestStatus(id: ID!, status: RefundStatus!): Boolean!
+}

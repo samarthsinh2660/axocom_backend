@@ -105,7 +105,50 @@ export const ERRORS = {
     MENTOR_NOT_FOUND: new RequestError("Mentor application not found", 60004, 404),
     INVALID_REVIEW_STATUS: new RequestError("Invalid review status", 60005, 400),
 
+    // Summit registration errors (7xxxx)
+    DELEGATE_PASS_NOT_FOUND: new RequestError("Delegate pass registration not found", 70001, 404),
+    NOMINATION_NOT_FOUND: new RequestError("Nomination registration not found", 70002, 404),
+    INVALID_PASS_SELECTION: new RequestError("Invalid delegate pass selection", 70003, 400),
+    INVALID_NOMINATION_PLAN: new RequestError("Invalid nomination plan selection", 70004, 400),
+    INVALID_QUANTITY: new RequestError("Number of passes must be between 1 and 10", 70005, 400),
+    INVALID_PAYMENT_STATUS: new RequestError("Invalid payment status", 70006, 400),
+    STARTUP_DETAILS_REQUIRED: new RequestError(
+        "Please describe your startup in at least 20 characters to claim this pass",
+        70007,
+        400
+    ),
 
+    // Payment gateway errors (9xxxx)
+    RAZORPAY_NOT_CONFIGURED: new RequestError("Payments are not configured", 90001, 500),
+    RAZORPAY_ORDER_FAILED: new RequestError("Could not start the payment", 90002, 500),
+    RAZORPAY_AUTH_FAILED: new RequestError("Payment gateway authentication failed", 90003, 500),
+    INVALID_ORDER_AMOUNT: new RequestError("Order amount must be at least 100 paise", 90004, 400),
+    PAYMENT_SIGNATURE_INVALID: new RequestError("Payment could not be verified", 90005, 400),
+    PAYMENT_ALREADY_COMPLETED: new RequestError("This registration is already paid", 90006, 409),
+    PAYMENT_ORDER_MISMATCH: new RequestError("Payment does not match this registration", 90007, 400),
+    PAYMENT_ORDER_MISSING: new RequestError("No payment was ever started for this registration", 90008, 404),
+    PAYMENT_ORDER_NOT_AT_GATEWAY: new RequestError("The gateway has no record of this order", 90009, 404),
+    PAYMENT_NOT_CAPTURED: new RequestError("The gateway has not captured a payment for this order", 90010, 409),
+    PAYMENT_ALREADY_SETTLED: new RequestError(
+        "This registration already has its payment recorded and cannot be settled again",
+        90011,
+        409
+    ),
+
+    // Refund request errors (8xxxx)
+    REFUND_REQUEST_NOT_FOUND: new RequestError("Refund request not found", 80001, 404),
+    INVALID_REFUND_STATUS: new RequestError("Invalid refund status", 80002, 400),
+    INVALID_REGISTRATION_TYPE: new RequestError("Invalid registration type", 80003, 400),
+    REFUND_REASON_REQUIRED: new RequestError("A reason for the refund request is required", 80004, 400),
+    REFUND_MESSAGE_REQUIRED: new RequestError("Message cannot be empty", 80005, 400),
+    REFUND_REGISTRATION_REQUIRED: new RequestError("A registration reference is required", 80006, 400),
+    INVALID_SUPPORT_REQUEST_TYPE: new RequestError("Invalid request type", 80008, 400),
+    REFUND_REGISTRATION_MISMATCH: new RequestError(
+        "We could not find a registration with that reference and email address. "
+            + "Please use the email address the registration was made with.",
+        80007,
+        404
+    ),
 };
 
 export function isDuplicateKeyError(error: unknown): boolean {

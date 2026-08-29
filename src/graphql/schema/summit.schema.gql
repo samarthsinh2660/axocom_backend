@@ -1,0 +1,184 @@
+"""Which registration a payment, refund or query belongs to."""
+enum RegistrationType {
+  delegate_pass
+  nomination
+}
+
+"""
+Money state of a summit registration. Amounts are always stored and returned
+in the smallest currency unit (paise for INR), matching Razorpay's convention.
+"""
+enum PaymentStatus {
+  pending
+  paid
+  failed
+  refunded
+}
+
+type DelegatePassRegistration {
+  id: ID!
+  fullName: String!
+  designation: String!
+  organisation: String!
+  email: String!
+  phone: String!
+  passName: String!
+  audience: String!
+  quantity: Int!
+  unitAmount: Int!
+  unitGstAmount: Int!
+  subtotalAmount: Int!
+  gstRateBps: Int!
+  gstAmount: Int!
+  totalAmount: Int!
+  currency: String!
+  gstNumber: String
+  startupDetails: String
+  contactConsentAt: DateTime!
+  paymentStatus: PaymentStatus!
+  razorpayOrderId: String
+  razorpayPaymentId: String
+  paidAt: DateTime
+  adminNote: String
+  reviewedAt: DateTime
+  reviewedByAdminId: Int
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type NominationRegistration {
+  id: ID!
+  nomineeName: String!
+  organisation: String!
+  designation: String!
+  email: String!
+  phone: String!
+  website: String
+  achievements: String!
+  planName: String!
+  baseAmount: Int!
+  gstRateBps: Int!
+  gstAmount: Int!
+  totalAmount: Int!
+  currency: String!
+  contactConsentAt: DateTime!
+  paymentStatus: PaymentStatus!
+  razorpayOrderId: String
+  razorpayPaymentId: String
+  paidAt: DateTime
+  adminNote: String
+  reviewedAt: DateTime
+  reviewedByAdminId: Int
+  createdAt: DateTime!
+  updatedAt: DateTime!
+}
+
+type DelegatePassRegistrationConnection {
+  data: [DelegatePassRegistration!]!
+  pagination: Pagination!
+}
+
+type NominationRegistrationConnection {
+  data: [NominationRegistration!]!
+  pagination: Pagination!
+}
+
+"""
+Amounts are in paise. Listed prices exclude GST; the server adds it, so
+totalAmount is what will actually be charged.
+"""
+type RegistrationResult {
+  registrationId: ID!
+  subtotalAmount: Int!
+  gstAmount: Int!
+  gstRateBps: Int!
+  totalAmount: Int!
+  paymentStatus: PaymentStatus!
+}
+
+type PaymentStatusTotals {
+  count: Int!
+  amount: Int!
+}
+
+type SummitRegistrationStats {
+  delegatePaid: PaymentStatusTotals!
+  delegatePending: PaymentStatusTotals!
+  nominationPaid: PaymentStatusTotals!
+  nominationPending: PaymentStatusTotals!
+  openRefundRequests: Int!
+}
+
+input RegisterDelegatePassInput {
+  fullName: String!
+  designation: String!
+  organisation: String!
+  email: String!
+  phone: String!
+  """Must match a pass name on the server's price list."""
+  passName: String!
+  quantity: Int!
+  gstNumber: String
+  """Required for passes that ask for it, such as the Startup Pass."""
+  startupDetails: String
+  """
+  Ignored. The price and audience now come from the server's price list.
+  Kept optional so a frontend deployed before this change keeps working -
+  GraphQL rejects the whole mutation for an undefined input field, so removing
+  these outright would fail every registration until both sides ship.
+  Safe to delete once no deployed client sends them.
+  """
+  audience: String
+  """Ignored. See `audience`."""
+  unitAmount: Int
+  contactConsent: Boolean!
+}
+
+input RegisterNominationInput {
+  nomineeName: String!
+  organisation: String!
+  designation: String!
+  email: String!
+  phone: String!
+  website: String
+  achievements: String!
+  """Must match a plan name on the server's price list."""
+  planName: String!
+  contactConsent: Boolean!
+  """
+  Ignored. The price now comes from the server's price list. Kept optional so a
+  frontend deployed before this change keeps working. Safe to delete once no
+  deployed client sends it.
+  """
+  baseAmount: Int
+}
+
+input UpdatePaymentStatusInput {
+  paymentStatus: PaymentStatus!
+  adminNote: String
+}
+
+extend type Query {
+  adminDelegatePassRegistrations(
+    paymentStatus: PaymentStatus
+    search: String
+    page: Int = 1
+    limit: Int = 20
+  ): DelegatePassRegistrationConnection!
+  adminDelegatePassRegistration(id: ID!): DelegatePassRegistration
+  adminNominationRegistrations(
+    paymentStatus: PaymentStatus
+    search: String
+    page: Int = 1
+    limit: Int = 20
+  ): NominationRegistrationConnection!
+  adminNominationRegistration(id: ID!): NominationRegistration
+  adminSummitStats: SummitRegistrationStats!
+}
+
+extend type Mutation {
+  registerDelegatePass(input: RegisterDelegatePassInput!): RegistrationResult!
+  registerNomination(input: RegisterNominationInput!): RegistrationResult!
+  updateDelegatePassPaymentStatus(id: ID!, input: UpdatePaymentStatusInput!): Boolean!
+  updateNominationPaymentStatus(id: ID!, input: UpdatePaymentStatusInput!): Boolean!
+}
